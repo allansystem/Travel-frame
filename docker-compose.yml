@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  travel-frame:
+    build: .
+    container_name: travel-frame
+    restart: unless-stopped
+    ports:
+      - "3070:3070"
+    volumes:
+      - ./data:/app/server/data
+      - ./uploads:/app/server/uploads
+    environment:
+      - PORT=3070
+      - NODE_ENV=production
