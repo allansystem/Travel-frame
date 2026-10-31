@@ -1426,9 +1426,12 @@ export default function TravelFrameApp() {
         <aside className="hidden md:flex w-64 bg-neutral-900 border-r border-neutral-800 flex-col justify-between shrink-0 z-30">
           <div>
             <div className="p-5 border-b border-neutral-800/80 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-indigo-500 via-sky-500 to-emerald-400 flex items-center justify-center shadow-lg shadow-sky-500/20">
-                <Sparkles className="w-5 h-5 text-white" />
-              </div>
+              <img 
+                src="/logo.png" 
+                alt="TravelFrame Logo" 
+                className="h-10 w-10 rounded-xl object-contain shadow-lg shadow-indigo-500/20 cursor-pointer hover:scale-105 transition-transform"
+                onClick={() => { setActiveTab('slideshow'); setViewingAlbumId(null); }}
+              />
               <div>
                 <h1 className="font-bold text-base leading-tight tracking-tight text-white">TravelFrame</h1>
                 <p className="text-xs text-neutral-400">Quadro Digital Centralizado</p>
@@ -1511,6 +1514,26 @@ export default function TravelFrameApp() {
       
       {/* 2. ÁREA PRINCIPAL */}
       <main className="flex-1 flex flex-col h-full overflow-hidden relative pb-16 md:pb-0">
+        
+        {/* CABEÇALHO MOBILE COM O LOGO */}
+        {!isFullscreen && !isKioskDisplayMode && activeTab !== 'slideshow' && (
+          <header className="md:hidden flex items-center justify-between px-4 py-3 bg-neutral-900 border-b border-neutral-800 shrink-0 z-30">
+            <div 
+              className="flex items-center gap-2.5 cursor-pointer"
+              onClick={() => { setActiveTab('slideshow'); setViewingAlbumId(null); }}
+            >
+              <img 
+                src="/logo.png" 
+                alt="TravelFrame Logo" 
+                className="h-8 w-8 rounded-lg object-contain shadow-md shadow-indigo-500/10" 
+              />
+              <div>
+                <h1 className="font-bold text-sm leading-tight text-white">TravelFrame</h1>
+                <p className="text-[10px] text-neutral-400">Quadro Digital Centralizado</p>
+              </div>
+            </div>
+          </header>
+        )}
         
         {/* NOTIFICAÇÃO UPLOAD FLUTUANTE */}
         {uploadProgress && (
