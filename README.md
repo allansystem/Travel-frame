@@ -1,5 +1,12 @@
 # 🖼️ TravelFrame - Quadro Digital de Fotos Inteligente
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
+[![Node.js](https://img.shields.io/badge/Node.js-20.x-green?logo=node.js&logoColor=white)](https://nodejs.org)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev)
+[![TailwindCSS](https://img.shields.io/badge/Tailwind-CSS-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com)
+[![Self-Hosted](https://img.shields.io/badge/Self--Hosted-100%25-orange)](https://github.com/allansystem/Travel-frame)
+
 Projeto de quadro digital de fotos e vídeos moderno, projetado para transformar monitores, Smart TVs ou telas dedicadas (Raspberry Pi, Mini PC, Debian/Ubuntu) em molduras digitais elegantes, com controle centralizado e sincronização via navegador.
 
 ---
