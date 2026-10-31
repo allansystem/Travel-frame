@@ -63,6 +63,40 @@ http://IP_DO_SERVIDOR:3070/display?device=sala
 
 ---
 
+## 📸 Integração com o Google Fotos (Google Photos Picker API)
+
+O TravelFrame possui integração nativa com a nova **Google Photos Picker API**. Isso permite abrir a sua biblioteca do Google Fotos diretamente no navegador, selecionar suas fotos favoritas e transferi-las automaticamente para o armazenamento local do seu servidor (com extração automática de data, câmera e localização via EXIF).
+
+> 💡 **Privacidade e Modo Offline**: Ao importar fotos do Google, os arquivos são salvos localmente na pasta `./uploads`. Isso significa que o seu quadro digital continuará funcionando e exibindo as fotos mesmo se a internet cair.
+
+### ⚙️ Como configurar o Google Client ID (Gratuito):
+
+1. **Acessar o Google Cloud Console**:
+   - Entre em [console.cloud.google.com](https://console.cloud.google.com/) e crie um novo projeto (ex: `TravelFrame`).
+
+2. **Ativar a API do Google Photos Picker**:
+   - No menu lateral, acesse **APIs e Serviços** > **Biblioteca**.
+   - Pesquise por **Google Photos Picker API** e clique em **Ativar** (Enable).
+
+3. **Configurar a Tela de Consentimento OAuth**:
+   - Acesse **APIs e Serviços** > **Tela de consentimento OAuth**.
+   - Escolha o tipo de usuário **Externo** e clique em Criar.
+   - Preencha o Nome do aplicativo (`TravelFrame`) e seu e-mail de contato.
+   - Na etapa de **Usuários de teste**, adicione o seu e-mail do Google (para permitir login enquanto o app estiver em modo de teste).
+
+4. **Criar Credenciais OAuth 2.0**:
+   - Acesse **APIs e Serviços** > **Credenciais** > **Criar credenciais** > **ID do cliente OAuth**.
+   - Em *Tipo de aplicativo*, selecione **Aplicativo da Web**.
+   - Em *Origens JavaScript autorizadas*, adicione os endereços onde você acessa o TravelFrame (ex: `http://localhost:3070` e `http://IP_DO_SERVIDOR:3070`).
+   - Clique em Criar e copie o **ID do cliente** gerado (termina com `.apps.googleusercontent.com`).
+
+5. **Conectar e Importar no TravelFrame**:
+   - No painel do TravelFrame, acesse a aba **Ajustes** ou clique em **Importar do Google Fotos**.
+   - Cole o seu Client ID no campo **Google Client ID** e clique em **Conectar Conta Google**.
+   - Selecione o álbum de destino e clique em **Importar Fotos**. A janela oficial do Google abrirá para você marcar as fotos desejadas e transferi-las com 1 clique!
+
+---
+
 ## 🛠️ Instalação Direta com Node.js (Sem Docker)
 
 Se preferir rodar diretamente no sistema sem container:
