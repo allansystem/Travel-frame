@@ -57,6 +57,12 @@ export default function TravelFrameApp() {
   
   // Visualizador de Foto (Lightbox)
   const [previewMediaItem, setPreviewMediaItem] = useState(null);
+  const [videoModalError, setVideoModalError] = useState(false);
+  const [videoPlaybackError, setVideoPlaybackError] = useState(false);
+
+  useEffect(() => {
+    setVideoModalError(false);
+  }, [previewMediaItem]);
   
   // Formulário Criar Álbum
   const [isCreatingAlbum, setIsCreatingAlbum] = useState(false);
@@ -1154,6 +1160,7 @@ export default function TravelFrameApp() {
   };
 
   const handleNextSlide = () => {
+    setVideoPlaybackError(false);
     const list = activeMediaListRef.current || [];
     if (list.length <= 1) {
       if (currentMediaRef.current?.type === 'video' && videoRef.current) {
@@ -1281,6 +1288,19 @@ export default function TravelFrameApp() {
     } else {
       handleNextSlide();
     }
+  };
+
+  const handleVideoError = (e) => {
+    console.warn("Erro ao reproduzir vídeo (codec ou formato não suportado pelo navegador):", e);
+    setVideoPlaybackError(true);
+    setIsCrossFading(true);
+    setTimeout(() => {
+      setVideoPlaybackError(false);
+      const list = activeMediaListRef.current || [];
+      if (list.length > 1) {
+        handleNextSlide();
+      }
+    }, 4000);
   };
   
   const toggleFullscreen = () => {
@@ -1627,6 +1647,7 @@ export default function TravelFrameApp() {
                           muted={!activeVideoSound}
                           playsInline
                           onEnded={handleVideoEnded}
+                          onError={handleVideoError}
                           onCanPlay={() => setIsCrossFading(true)}
                           className={`w-full h-full ${activeFitMode === 'cover' ? 'object-cover' : 'object-contain'} drop-shadow-2xl`}
                         />
@@ -1715,6 +1736,14 @@ export default function TravelFrameApp() {
                   <div className="absolute top-10 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-neutral-900/90 backdrop-blur-md border border-neutral-700 text-white rounded-full text-xs font-semibold shadow-2xl flex items-center gap-2 pointer-events-none transition-all animate-bounce">
                     <Shuffle className="w-4 h-4 text-sky-400" />
                     <span>{shuffleToast}</span>
+                  </div>
+                )}
+
+                {/* AVISO TEMPORÁRIO DE CODEC DE VÍDEO INCOMPATÍVEL */}
+                {videoPlaybackError && (
+                  <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-neutral-950/95 backdrop-blur-md border border-amber-500/70 text-amber-300 rounded-2xl text-xs md:text-sm font-semibold shadow-2xl flex items-center gap-2.5 pointer-events-none animate-bounce">
+                    <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+                    <span>Vídeo em codec incompatível (HEVC/H.265). Pulando para o próximo slide...</span>
                   </div>
                 )}
                 
@@ -2777,12 +2806,33 @@ export default function TravelFrameApp() {
             {/* Imagem / Vídeo */}
             <div className="max-w-full max-h-full flex items-center justify-center p-2">
               {previewMediaItem.type === 'video' ? (
-                <video 
-                  src={previewMediaItem.url} 
-                  controls 
-                  autoPlay 
-                  className="max-h-[70vh] max-w-[88vw] object-contain rounded-2xl shadow-2xl border border-neutral-800"
-                />
+                <div className="relative max-w-full max-h-full flex items-center justify-center">
+                  <video 
+                    key={`modal-vid-${previewMediaItem.id}`}
+                    src={previewMediaItem.url} 
+                    controls 
+                    autoPlay 
+                    onError={() => setVideoModalError(true)}
+                    onPlay={() => setVideoModalError(false)}
+                    className="max-h-[70vh] max-w-[88vw] object-contain rounded-2xl shadow-2xl border border-neutral-800"
+                  />
+                  {videoModalError && (
+                    <div className="absolute inset-0 bg-neutral-950/95 rounded-2xl flex flex-col items-center justify-center p-6 text-center text-neutral-200 backdrop-blur-md border border-amber-500/40 shadow-2xl">
+                      <AlertTriangle className="w-12 h-12 text-amber-400 mb-3 animate-pulse" />
+                      <h3 className="text-lg font-bold text-white mb-1">Codec não suportado pelo navegador</h3>
+                      <p className="text-sm text-neutral-300 max-w-md mb-4 leading-relaxed">
+                        Este vídeo utiliza codificação <strong>HEVC / H.265</strong> (padrão de câmeras GoPro e iPhones 4K/5.3K), que a maioria dos navegadores web não decodifica nativamente.
+                      </p>
+                      <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-3.5 text-xs text-neutral-300 text-left max-w-md space-y-2">
+                        <p className="font-semibold text-sky-400">💡 Como resolver:</p>
+                        <p>Converta o vídeo para o formato universal <strong>H.264 (MP4)</strong> antes de enviar usando o conversor do projeto:</p>
+                        <div className="bg-neutral-950 p-2 rounded-lg font-mono text-emerald-400 text-[11px] select-all border border-neutral-800">
+                          ./converter-videos.sh "/pasta/dos/videos"
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <img 
                   src={previewMediaItem.url} 

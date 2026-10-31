@@ -75,6 +75,24 @@ http://IP_DO_SERVIDOR:3070/display?device=sala
 
 ---
 
+## 📹 Formatos de Vídeo Compatíveis e Otimização (H.264 vs HEVC/H.265)
+
+Os navegadores web e telas de Smart TV / Raspberry Pi utilizam o padrão mundial **H.264 (AVC) com áudio AAC** dentro de contêiner **MP4**.
+
+### ⚠️ Por que vídeos de GoPro ou iPhone (HEVC / H.265) dão erro no navegador?
+Câmeras de ação como **GoPro** (ex: `GX011819.MP4`) e iPhones frequentemente gravam em **HEVC (H.265)** em resoluções ultra-pesadas como 4K ou 5.3K (5312x2988 a 60 Mbps). Navegadores web (Firefox, Chrome no Linux, TVs) não decodificam HEVC nativamente por restrições de licenças de patentes do consórcio MPEG.
+
+### ⚡ Como converter seus vídeos facilmente com o script incluso:
+O TravelFrame inclui um script automático para converter qualquer vídeo ou pasta inteira de vídeos para o padrão web:
+
+```bash
+# Converte todos os vídeos de uma pasta para H.264 Full HD otimizado:
+./converter-videos.sh "/caminho/para/seus/videos"
+```
+Os arquivos convertidos serão salvos na subpasta `convertidos_para_o_quadro/` prontos para upload com 100% de compatibilidade e reprodução instantânea!
+
+---
+
 ## 📸 Integração com o Google Fotos (Google Photos Picker API)
 
 O TravelFrame possui integração nativa com a nova **Google Photos Picker API**. Isso permite abrir a sua biblioteca do Google Fotos diretamente no navegador, selecionar suas fotos favoritas e transferi-las automaticamente para o armazenamento local do seu servidor (com extração automática de data, câmera e localização via EXIF).

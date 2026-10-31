@@ -14,6 +14,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3070
 
+# Instala ffmpeg para processamento e suporte a mídias
+RUN apk add --no-cache ffmpeg
+
 COPY package*.json ./
 RUN npm install --omit=dev
 
