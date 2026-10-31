@@ -1,13 +1,14 @@
-# 🖼️ TravelFrame - Quadro Digital de Fotos Inteligente
+# 🖼️ TravelFrame - Quadro Digital de Fotos e Vídeos Inteligente
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
 [![Node.js](https://img.shields.io/badge/Node.js-20.x-green?logo=node.js&logoColor=white)](https://nodejs.org)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-CSS-38B2AC?logo=tailwind-css&logoColor=white)](https://tailwindcss.com)
+[![Video Support](https://img.shields.io/badge/Vídeos-MP4%20%7C%20WebM%20%7C%20MOV%20%7C%20M4V-8A2BE2)](https://github.com/allansystem/Travel-frame)
 [![Self-Hosted](https://img.shields.io/badge/Self--Hosted-100%25-orange)](https://github.com/allansystem/Travel-frame)
 
-Projeto de quadro digital de fotos e vídeos moderno, projetado para transformar monitores, Smart TVs ou telas dedicadas (Raspberry Pi, Mini PC, Debian/Ubuntu) em molduras digitais elegantes, com controle centralizado e sincronização via navegador.
+Quadro digital moderno para fotos e vídeos, projetado para transformar monitores, Smart TVs ou telas dedicadas (Raspberry Pi, Mini PC, Debian/Ubuntu) em molduras digitais elegantes, com suporte a vídeos em alta definição, temporização inteligente, controle de som por álbum, transições cinematográficas e sincronização via navegador.
 
 ---
 
@@ -57,16 +58,20 @@ http://IP_DO_SERVIDOR:3070/display?device=sala
 *(Você pode criar quantos telões quiser: `?device=quarto`, `?device=recepcao`, `?device=matriz`, etc.)*
 
 ### ✨ Principais Recursos do Modo Quadro:
-1. **Transição Suave (Crossfade Cinematográfico)**: Transição contínua de dupla camada sem piscadas nem tela preta; as fotos se dissolvem suavemente uma sobre a outra.
-2. **Pré-carregamento Automático (Preload)**: Baixa as próximas fotos em segundo plano para exibição instantânea com zero delay.
-3. **Rotação Completa de Canvas (Modo Vertical/Retrato)**: Ao virar o monitor na vertical (`90°` ou `-90°`), todo o quadro (foto, relógio, clima e legenda) gira conjuntamente para visualização correta na parede.
-4. **Fundo Ambiente Desfocado (Ambient Backlight / Blur)**: Preenche as laterais com efeito blur dinâmico baseado nas cores da foto atual.
-5. **Efeito Ken Burns**: Movimento panorâmico lento e sutil nas fotos estilo protetor de tela da Apple TV.
-6. **Relógio, Data e Previsão do Tempo ao Vivo**: Exibe clima local em tempo real (Open-Meteo, sem necessidade de chave de API).
-7. **Descrição Destacada**: Exibe a descrição do álbum no topo com fonte grande e elegante.
-8. **Modo Noturno / Repouso Agendado**: Permite programar horários para a tela descansar com economia de energia e tela preta.
-9. **Controle Remoto Centralizado**: Pelo celular ou PC, controle remotamente o que cada telão está exibindo em tempo real.
-10. **Ocultação Automática do Cursor**: O cursor do mouse e controles somem após inatividade para uma experiência de quadro limpo.
+1. **🎬 Suporte Nativo a Vídeos**: Reprodução automática e fluida de clipes de vídeo nos formatos `.mp4`, `.webm`, `.mov` e `.m4v`.
+2. **⏱️ Temporização Inteligente (Duração Real)**: O quadro detecta vídeos automaticamente e aguarda o término completo da mídia (`onEnded`) antes de avançar para a próxima foto ou vídeo, sem cortes abruptos. Se houver apenas 1 vídeo no álbum, ele roda em repetição contínua (loop).
+3. **🔊 Controle de Áudio por Álbum**: Chave independente em cada álbum para habilitar ou silenciar o som dos vídeos (`videoSound`), perfeito para manter silêncio em quartos ou salas de reunião.
+4. **🚀 Upload em Stream para Arquivos Grandes**: Suporte a envio de fotos pesadas e vídeos grandes do celular ou computador via upload segmentado em stream.
+5. **Transição Suave (Crossfade Cinematográfico)**: Transição contínua de dupla camada sem piscadas nem tela preta; fotos e vídeos se dissolvem suavemente um sobre o outro.
+6. **Pré-carregamento Automático (Preload)**: Baixa as próximas fotos em segundo plano para exibição instantânea com zero delay.
+7. **Rotação Completa de Canvas (Modo Vertical/Retrato)**: Ao virar o monitor na vertical (`90°` ou `-90°`), todo o quadro (foto, vídeo, relógio, clima e legenda) gira conjuntamente para visualização correta na parede.
+8. **Fundo Ambiente Desfocado (Ambient Backlight / Blur)**: Preenche as laterais com efeito blur dinâmico baseado nas cores da foto ou vídeo atual.
+9. **Efeito Ken Burns**: Movimento panorâmico lento e sutil nas fotos estilo protetor de tela da Apple TV.
+10. **Relógio, Data e Previsão do Tempo ao Vivo**: Exibe clima local em tempo real (Open-Meteo, sem necessidade de chave de API).
+11. **Descrição Destacada**: Exibe a descrição do álbum no topo com fonte grande e elegante.
+12. **Modo Noturno / Repouso Agendado**: Permite programar horários para a tela descansar com economia de energia e tela preta.
+13. **Controle Remoto Centralizado**: Pelo celular ou PC, controle remotamente o que cada telão está exibindo em tempo real.
+14. **Ocultação Automática do Cursor**: O cursor do mouse e controles somem após inatividade para uma experiência de quadro limpo.
 
 ---
 
