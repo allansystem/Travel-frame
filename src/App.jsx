@@ -5,7 +5,7 @@ import {
   Upload, Image as ImageIcon, Video, Clock, MapPin, Cloud, 
   Moon, Sun, Trash2, Shuffle, Layers, Sparkles, ArrowLeft, Plus, 
   Camera, Key, CheckCircle2, AlertCircle, Folder, Monitor, Volume2, VolumeX, Eye, Edit3, Star, Calendar, Check, MoveRight, RotateCcw, RotateCw, Tv, RefreshCw, Film, Copy, Clock3, CalendarDays, Type, AlignLeft, AlertTriangle, CloudSun, SunMedium,
-  ChevronLeft, ChevronRight, X, HardDrive, ArrowUpDown, SlidersHorizontal, Download
+  ChevronLeft, ChevronRight, X, HardDrive, ArrowUpDown, SlidersHorizontal, Download, ChevronUp, ChevronDown, GripVertical
 } from 'lucide-react';
 
 const DAYS_OF_WEEK = [
@@ -140,6 +140,7 @@ export default function TravelFrameApp() {
   const [newSchedDays, setNewSchedDays] = useState([0, 1, 2, 3, 4, 5, 6]);
   const [newSchedStart, setNewSchedStart] = useState('22:00');
   const [newSchedEnd, setNewSchedEnd] = useState('07:00');
+  const [draggedScheduleIndex, setDraggedScheduleIndex] = useState(null);
   
   // Dispositivos Remotos
   const [registeredDevices, setRegisteredDevices] = useState({});
@@ -648,6 +649,44 @@ export default function TravelFrameApp() {
     const updated = albumSchedules.filter(s => s.id !== ruleId);
     setAlbumSchedules(updated);
     syncWithServer({ schedules: updated });
+  };
+
+  // Mover agendamento para cima ou para baixo na lista
+  const handleMoveSchedule = (index, direction) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= albumSchedules.length) return;
+    const updated = [...albumSchedules];
+    const item = updated[index];
+    updated[index] = updated[targetIndex];
+    updated[targetIndex] = item;
+    setAlbumSchedules(updated);
+    syncWithServer({ schedules: updated });
+  };
+
+  // Ordenar agendamentos cronologicamente pelo horário de início
+  const handleSortSchedulesChronologically = () => {
+    if (!albumSchedules || albumSchedules.length <= 1) return;
+    const updated = [...albumSchedules].sort((a, b) => {
+      if (a.start !== b.start) return a.start.localeCompare(b.start);
+      return a.end.localeCompare(b.end);
+    });
+    setAlbumSchedules(updated);
+    syncWithServer({ schedules: updated });
+  };
+
+  // Drag and Drop de agendamentos
+  const handleDragStartSchedule = (index) => {
+    setDraggedScheduleIndex(index);
+  };
+
+  const handleDropSchedule = (targetIndex) => {
+    if (draggedScheduleIndex === null || draggedScheduleIndex === targetIndex) return;
+    const updated = [...albumSchedules];
+    const [moved] = updated.splice(draggedScheduleIndex, 1);
+    updated.splice(targetIndex, 0, moved);
+    setAlbumSchedules(updated);
+    syncWithServer({ schedules: updated });
+    setDraggedScheduleIndex(null);
   };
   
   const handleCreateAlbum = () => {
@@ -2014,45 +2053,131 @@ export default function TravelFrameApp() {
                     </button>
                   </div>
                   
+                  {/* CABEÇALHO DA LISTA DE AGENDAMENTOS COM BOTÃO DE ORDENAR */}
+                  {albumSchedules.length > 0 && (
+                    <div className="flex items-center justify-between pt-3 pb-1 border-t border-neutral-800/80">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-neutral-300">
+                          Agendamentos Cadastrados ({albumSchedules.length})
+                        </span>
+                        <span className="text-[10px] text-neutral-500 font-mono hidden sm:inline">
+                          (Use as setas ou arraste para ordenar)
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSortSchedulesChronologically}
+                        className="px-2.5 py-1 bg-neutral-900 border border-neutral-800 hover:border-sky-500 hover:text-sky-400 text-neutral-300 rounded-lg text-xs font-medium flex items-center gap-1.5 transition shadow-sm active:scale-95"
+                        title="Reorganizar automaticamente todos os agendamentos pelo horário de início (do mais cedo para o mais tarde)"
+                      >
+                        <Clock className="w-3.5 h-3.5 text-sky-400" />
+                        <span>Ordenar por Horário</span>
+                      </button>
+                    </div>
+                  )}
+
                   {albumSchedules.length === 0 ? (
                     <div className="p-4 text-center text-xs text-neutral-500">
                       Nenhum agendamento ativo no momento.
                     </div>
                   ) : (
-                    albumSchedules.map((sched) => {
+                    albumSchedules.map((sched, idx) => {
                       const isSleep = sched.albumId === 'SLEEP';
                       const albumObj = albums.find(a => a.id === sched.albumId);
                       const isCurrentlyActiveRule = activeRuleIdRef.current === sched.id;
+                      const isFirst = idx === 0;
+                      const isLast = idx === albumSchedules.length - 1;
+                      const isDraggingThis = draggedScheduleIndex === idx;
 
                       return (
-                        <div key={sched.id} className={`p-3.5 border rounded-xl flex items-center justify-between transition-all ${
-                          isCurrentlyActiveRule 
-                            ? 'bg-emerald-950/30 border-emerald-500/50 shadow-lg' 
-                            : isSleep 
-                              ? 'bg-indigo-950/25 border-indigo-500/30' 
-                              : 'bg-neutral-950 border-neutral-800'
-                        }`}>
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-white">
-                                {isSleep ? '🌙 Modo Dormir' : (albumObj?.name || sched.ruleName || 'Álbum')}
-                              </span>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${isSleep ? 'bg-indigo-500/20 text-indigo-300' : 'bg-sky-500/20 text-sky-400'}`}>
-                                {getDeviceDisplayName(sched.deviceId)}
-                              </span>
-                              {isCurrentlyActiveRule && (
-                                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-pulse">
-                                  ● ATIVO AGORA
-                                </span>
-                              )}
+                        <div 
+                          key={sched.id} 
+                          draggable
+                          onDragStart={() => handleDragStartSchedule(idx)}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={() => handleDropSchedule(idx)}
+                          className={`p-3.5 border rounded-xl flex items-center justify-between transition-all group ${
+                            isDraggingThis ? 'opacity-40 border-dashed border-sky-400' : ''
+                          } ${
+                            isCurrentlyActiveRule 
+                              ? 'bg-emerald-950/30 border-emerald-500/50 shadow-lg' 
+                              : isSleep 
+                                ? 'bg-indigo-950/25 border-indigo-500/30 hover:border-indigo-500/50' 
+                                : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            {/* Alça de Arrastar (Drag Handle) */}
+                            <div 
+                              className="cursor-grab active:cursor-grabbing text-neutral-600 hover:text-neutral-300 transition p-0.5" 
+                              title="Clique e arraste para reordenar"
+                            >
+                              <GripVertical className="w-4 h-4" />
                             </div>
-                            <span className="text-[11px] text-neutral-400 font-mono block">
-                              {formatDaysText(sched.days)} • {sched.start} até às {sched.end}
+
+                            {/* Número da Posição */}
+                            <span className="text-[11px] font-mono text-neutral-500 w-4 text-center select-none font-bold">
+                              {idx + 1}
                             </span>
+
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-white">
+                                  {isSleep ? '🌙 Modo Dormir' : (albumObj?.name || sched.ruleName || 'Álbum')}
+                                </span>
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${isSleep ? 'bg-indigo-500/20 text-indigo-300' : 'bg-sky-500/20 text-sky-400'}`}>
+                                  {getDeviceDisplayName(sched.deviceId)}
+                                </span>
+                                {isCurrentlyActiveRule && (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-pulse">
+                                    ● ATIVO AGORA
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[11px] text-neutral-400 font-mono block">
+                                {formatDaysText(sched.days)} • {sched.start} até às {sched.end}
+                              </span>
+                            </div>
                           </div>
-                          <button onClick={() => handleDeleteAlbumSchedule(sched.id)} className="p-1.5 text-neutral-400 hover:text-rose-400 rounded-lg hover:bg-neutral-900" title="Excluir agendamento">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+
+                          {/* AÇÕES: BOTÕES SUBIR / DESCER E EXCLUIR */}
+                          <div className="flex items-center gap-1">
+                            <button 
+                              onClick={() => handleMoveSchedule(idx, -1)} 
+                              disabled={isFirst}
+                              className={`p-1.5 rounded-lg transition ${
+                                isFirst 
+                                  ? 'text-neutral-700 cursor-not-allowed' 
+                                  : 'text-neutral-400 hover:text-sky-400 hover:bg-neutral-900 active:scale-95'
+                              }`} 
+                              title="Mover para cima (Subir)"
+                            >
+                              <ChevronUp className="w-4 h-4" />
+                            </button>
+
+                            <button 
+                              onClick={() => handleMoveSchedule(idx, 1)} 
+                              disabled={isLast}
+                              className={`p-1.5 rounded-lg transition ${
+                                isLast 
+                                  ? 'text-neutral-700 cursor-not-allowed' 
+                                  : 'text-neutral-400 hover:text-sky-400 hover:bg-neutral-900 active:scale-95'
+                              }`} 
+                              title="Mover para baixo (Descer)"
+                            >
+                              <ChevronDown className="w-4 h-4" />
+                            </button>
+
+                            <div className="w-px h-4 bg-neutral-800 mx-1" />
+
+                            <button 
+                              onClick={() => handleDeleteAlbumSchedule(sched.id)} 
+                              className="p-1.5 text-neutral-400 hover:text-rose-400 rounded-lg hover:bg-neutral-900 transition active:scale-95" 
+                              title="Excluir agendamento"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                       );
                     })
