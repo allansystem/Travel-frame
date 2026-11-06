@@ -3,6 +3,8 @@ import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import convert from 'heic-convert';
+import exifr from 'exifr';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -219,12 +221,13 @@ app.post('/api/upload-stream', (req, res) => {
     const rawFilename = req.headers['x-filename'] ? decodeURIComponent(req.headers['x-filename']) : `media-${Date.now()}.jpg`;
     const albumId = req.headers['x-album-id'] || 'all';
     const title = req.headers['x-title'] ? decodeURIComponent(req.headers['x-title']) : path.basename(rawFilename, path.extname(rawFilename));
-    const date = req.headers['x-date'] || new Date().toISOString().split('T')[0];
-    const camera = req.headers['x-camera'] ? decodeURIComponent(req.headers['x-camera']) : 'Câmera';
-    const location = req.headers['x-location'] ? decodeURIComponent(req.headers['x-location']) : '';
+    let date = req.headers['x-date'] || new Date().toISOString().split('T')[0];
+    let camera = req.headers['x-camera'] ? decodeURIComponent(req.headers['x-camera']) : 'Câmera';
+    let location = req.headers['x-location'] ? decodeURIComponent(req.headers['x-location']) : '';
 
     const ext = path.extname(rawFilename) || '.jpg';
     const isVideo = ['.mp4', '.webm', '.mov', '.m4v'].includes(ext.toLowerCase());
+    const isHeic = ['.heic', '.heif'].includes(ext.toLowerCase());
     const safeFilename = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}${ext}`;
     const destinationPath = path.join(UPLOADS_DIR, safeFilename);
 
@@ -232,13 +235,67 @@ app.post('/api/upload-stream', (req, res) => {
 
     req.pipe(writeStream);
 
-    writeStream.on('finish', () => {
+    writeStream.on('finish', async () => {
+      let finalFilename = safeFilename;
       let fileSize = 0;
+
       try {
         if (fs.existsSync(destinationPath)) {
           fileSize = fs.statSync(destinationPath).size;
         }
       } catch (e) {}
+
+      // Se for arquivo HEIC/HEIF, converte automaticamente para JPEG (compatível com todos os navegadores e TVs)
+      if (isHeic) {
+        try {
+          const inputBuffer = fs.readFileSync(destinationPath);
+
+          // Extrai metadados EXIF caso o cliente não tenha enviado ou enviado valores padrão
+          try {
+            const exifData = await exifr.parse(inputBuffer, { gps: true, xmp: true });
+            if (exifData?.DateTimeOriginal && (!req.headers['x-date'] || date === new Date().toISOString().split('T')[0])) {
+              date = new Date(exifData.DateTimeOriginal).toISOString().split('T')[0];
+            }
+            if (exifData?.Model && (!req.headers['x-camera'] || camera === 'Câmera')) {
+              camera = exifData.Model;
+            }
+            if (exifData?.latitude && exifData?.longitude && (!req.headers['x-location'] || location === 'Local' || !location)) {
+              location = `${exifData.latitude.toFixed(3)}°, ${exifData.longitude.toFixed(3)}°`;
+            }
+          } catch (exErr) {}
+
+          // Verifica se o arquivo já é na verdade um JPEG com extensão .heic
+          const isActuallyJpeg = inputBuffer.length > 3 && inputBuffer[0] === 0xFF && inputBuffer[1] === 0xD8 && inputBuffer[2] === 0xFF;
+          let convertedBuffer = null;
+
+          if (isActuallyJpeg) {
+            convertedBuffer = inputBuffer;
+          } else {
+            convertedBuffer = await convert({
+              buffer: inputBuffer,
+              format: 'JPEG',
+              quality: 0.92
+            });
+          }
+
+          const jpgFilename = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.jpg`;
+          const jpgPath = path.join(UPLOADS_DIR, jpgFilename);
+          fs.writeFileSync(jpgPath, convertedBuffer);
+
+          // Remove o arquivo original .heic temporário
+          try {
+            if (fs.existsSync(destinationPath) && destinationPath !== jpgPath) {
+              fs.unlinkSync(destinationPath);
+            }
+          } catch (e) {}
+
+          finalFilename = jpgFilename;
+          fileSize = convertedBuffer.length;
+        } catch (convErr) {
+          console.error('Erro ao converter arquivo HEIC para JPEG:', convErr);
+          // Em caso de erro, mantém o arquivo salvo como fallback
+        }
+      }
 
       const newItem = {
         id: `med-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -249,7 +306,7 @@ app.post('/api/upload-stream', (req, res) => {
         camera: camera,
         type: isVideo ? 'video' : 'image',
         size: fileSize,
-        url: `/uploads/${safeFilename}`
+        url: `/uploads/${finalFilename}`
       };
 
       state.mediaList = [newItem, ...(state.mediaList || [])];

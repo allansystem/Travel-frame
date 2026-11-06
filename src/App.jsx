@@ -815,7 +815,9 @@ export default function TravelFrameApp() {
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) {
           const percent = Math.round((event.loaded / event.total) * 100);
-          setUploadProgress({ filename: file.name, percent, current: index + 1, total });
+          const isHeic = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
+          const displayName = (percent === 100 && isHeic) ? `Convertendo ${file.name}...` : file.name;
+          setUploadProgress({ filename: displayName, percent, current: index + 1, total });
         }
       };
       
@@ -823,7 +825,7 @@ export default function TravelFrameApp() {
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             const data = JSON.parse(xhr.responseText);
-            const item = { ...data.item, size: file.size || data.item?.size || 0 };
+            const item = { ...data.item, size: data.item?.size || file.size || 0 };
             resolve(item);
           } catch (e) { reject(e); }
         } else { reject(new Error(`HTTP ${xhr.status}`)); }
@@ -2477,7 +2479,7 @@ export default function TravelFrameApp() {
         {/* 4. ABA ÁLBUNS & GALERIA */}
         {activeTab === 'albums' && (
           <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-neutral-950">
-            <input ref={manualFileInputRef} type="file" multiple accept="image/*,video/*" onChange={handleManualUpload} className="hidden" />
+            <input ref={manualFileInputRef} type="file" multiple accept="image/*,video/*,.heic,.HEIC,.heif,.HEIF" onChange={handleManualUpload} className="hidden" />
             
             {!viewingAlbumId ? (
               <div className="space-y-6 max-w-6xl mx-auto">
