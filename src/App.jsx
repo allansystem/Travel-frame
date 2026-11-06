@@ -51,6 +51,9 @@ export default function TravelFrameApp() {
   
   // Álbuns e Mídia
   const [albums, setAlbums] = useState(DEFAULT_ALBUMS);
+  const [albumSortBy, setAlbumSortBy] = useState('custom');
+  const [albumSortOrder, setAlbumSortOrder] = useState('asc');
+  const [draggedAlbumIndex, setDraggedAlbumIndex] = useState(null);
   const [mediaList, setMediaList] = useState([]);
   const [selectedAlbumId, setSelectedAlbumId] = useState('all');
   const [viewingAlbumId, setViewingAlbumId] = useState(null);
@@ -247,6 +250,8 @@ export default function TravelFrameApp() {
           if (data.settings.screenRotationMode) setScreenRotationMode(data.settings.screenRotationMode);
           if (data.settings.autoRotateDirection !== undefined) setAutoRotateDirection(data.settings.autoRotateDirection);
           if (data.settings.kenBurns !== undefined) setKenBurnsEffect(data.settings.kenBurns);
+          if (data.settings.albumsSortBy) setAlbumSortBy(data.settings.albumsSortBy);
+          if (data.settings.albumsSortOrder) setAlbumSortOrder(data.settings.albumsSortOrder);
         }
       }
     } catch (e) {
@@ -988,6 +993,47 @@ export default function TravelFrameApp() {
     }
   };
   
+  // Helper para obter a data mais recente de fotos ou criação do álbum
+  const getAlbumLatestDate = (alb, list) => {
+    const albumMedia = list.filter(m => m.albumId === alb.id);
+    if (albumMedia.length === 0) {
+      const match = alb.id.match(/\d+/);
+      return match ? Number(match[0]) : 0;
+    }
+    let latest = '';
+    for (const m of albumMedia) {
+      const d = m.date || '';
+      if (d > latest) latest = d;
+    }
+    return latest || 0;
+  };
+
+  // Ordenador de Álbuns por Nome, Data Recente ou Quantidade de Fotos
+  const sortAlbumsList = (albList, sortBy, sortOrder, list) => {
+    if (sortBy === 'custom') return albList;
+    return [...albList].sort((a, b) => {
+      let comp = 0;
+      if (sortBy === 'name') {
+        const nameA = (a.name || '').trim();
+        const nameB = (b.name || '').trim();
+        comp = nameA.localeCompare(nameB, 'pt-BR', { numeric: true, sensitivity: 'base' });
+      } else if (sortBy === 'count') {
+        const countA = list.filter(m => m.albumId === a.id).length;
+        const countB = list.filter(m => m.albumId === b.id).length;
+        comp = countA - countB;
+      } else if (sortBy === 'date') {
+        const dateA = getAlbumLatestDate(a, list);
+        const dateB = getAlbumLatestDate(b, list);
+        if (typeof dateA === 'string' && typeof dateB === 'string') {
+          comp = dateA.localeCompare(dateB);
+        } else {
+          comp = Number(dateA) - Number(dateB);
+        }
+      }
+      return sortOrder === 'asc' ? comp : -comp;
+    });
+  };
+
   // Ordenador de Mídias por Nome, Data ou Tamanho
   const sortMediaList = (list, sortBy, sortOrder) => {
     return [...list].sort((a, b) => {
@@ -1403,6 +1449,93 @@ export default function TravelFrameApp() {
 
     setAlbums(updatedAlbums);
     syncWithServer({ albums: updatedAlbums });
+  };
+
+  // Altera e PERSISTE a ordenação dos ÁLBUNS
+  const handleAlbumSortChange = (criteria) => {
+    let newSortBy = criteria;
+    let newSortOrder = albumSortOrder;
+
+    if (albumSortBy === criteria) {
+      newSortOrder = albumSortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+      newSortBy = criteria;
+      if (criteria === 'name') newSortOrder = 'asc';
+      else if (criteria === 'date' || criteria === 'count') newSortOrder = 'desc';
+      else newSortOrder = 'asc';
+    }
+
+    setAlbumSortBy(newSortBy);
+    setAlbumSortOrder(newSortOrder);
+
+    if (newSortBy !== 'custom') {
+      const sorted = sortAlbumsList(albums, newSortBy, newSortOrder, mediaList);
+      setAlbums(sorted);
+      syncWithServer({ 
+        albums: sorted,
+        settings: { albumsSortBy: newSortBy, albumsSortOrder: newSortOrder }
+      });
+    } else {
+      syncWithServer({ 
+        settings: { albumsSortBy: 'custom', albumsSortOrder: newSortOrder }
+      });
+    }
+  };
+
+  // Inverte e PERSISTE a direção de ordenação dos álbuns
+  const handleToggleAlbumSortOrder = () => {
+    const newOrder = albumSortOrder === 'asc' ? 'desc' : 'asc';
+    setAlbumSortOrder(newOrder);
+    if (albumSortBy !== 'custom') {
+      const sorted = sortAlbumsList(albums, albumSortBy, newOrder, mediaList);
+      setAlbums(sorted);
+      syncWithServer({ 
+        albums: sorted,
+        settings: { albumsSortBy: albumSortBy, albumsSortOrder: newOrder }
+      });
+    } else {
+      // Inverte a ordem manual da lista de álbuns
+      const reversed = [...albums].reverse();
+      setAlbums(reversed);
+      syncWithServer({ 
+        albums: reversed,
+        settings: { albumsSortBy: 'custom', albumsSortOrder: newOrder }
+      });
+    }
+  };
+
+  // Mover álbum manualmente (Esquerda / Direita ou Cima / Baixo)
+  const handleMoveAlbum = (index, direction) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= albums.length) return;
+    const updated = [...albums];
+    const item = updated[index];
+    updated[index] = updated[targetIndex];
+    updated[targetIndex] = item;
+    setAlbums(updated);
+    setAlbumSortBy('custom');
+    syncWithServer({ 
+      albums: updated,
+      settings: { albumsSortBy: 'custom', albumsSortOrder: albumSortOrder }
+    });
+  };
+
+  const handleDragStartAlbum = (index) => {
+    setDraggedAlbumIndex(index);
+  };
+
+  const handleDropAlbum = (targetIndex) => {
+    if (draggedAlbumIndex === null || draggedAlbumIndex === targetIndex) return;
+    const updated = [...albums];
+    const [moved] = updated.splice(draggedAlbumIndex, 1);
+    updated.splice(targetIndex, 0, moved);
+    setAlbums(updated);
+    setAlbumSortBy('custom');
+    syncWithServer({ 
+      albums: updated,
+      settings: { albumsSortBy: 'custom', albumsSortOrder: albumSortOrder }
+    });
+    setDraggedAlbumIndex(null);
   };
 
   const handlePreviewNext = () => {
@@ -2476,22 +2609,154 @@ export default function TravelFrameApp() {
                   </div>
                 )}
                 
+                {/* BARRA DE ORDENAÇÃO DE ÁLBUNS COM SALVAMENTO DEFINITIVO */}
+                {albums.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 bg-neutral-900/80 p-3.5 rounded-2xl border border-neutral-800 shadow">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-neutral-300 font-medium flex items-center gap-1.5 mr-1">
+                        <ArrowUpDown className="w-3.5 h-3.5 text-sky-400" />
+                        Ordem dos Álbuns:
+                      </span>
+                      
+                      <div className="flex flex-wrap items-center bg-neutral-950 p-1 rounded-xl border border-neutral-800 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleAlbumSortChange('name')}
+                          className={`px-3 py-1.5 text-xs rounded-lg transition flex items-center gap-1.5 ${
+                            albumSortBy === 'name' 
+                              ? 'bg-sky-600 text-white font-semibold shadow' 
+                              : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+                          }`}
+                          title="Ordenar alfabeticamente por nome"
+                        >
+                          <Type className="w-3.5 h-3.5" />
+                          <span>Nome {albumSortBy === 'name' ? (albumSortOrder === 'asc' ? '(A-Z)' : '(Z-A)') : ''}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAlbumSortChange('date')}
+                          className={`px-3 py-1.5 text-xs rounded-lg transition flex items-center gap-1.5 ${
+                            albumSortBy === 'date' 
+                              ? 'bg-sky-600 text-white font-semibold shadow' 
+                              : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+                          }`}
+                          title="Ordenar por data mais recente das fotos"
+                        >
+                          <Calendar className="w-3.5 h-3.5" />
+                          <span>Data {albumSortBy === 'date' ? (albumSortOrder === 'desc' ? '(Recentes)' : '(Antigos)') : ''}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAlbumSortChange('count')}
+                          className={`px-3 py-1.5 text-xs rounded-lg transition flex items-center gap-1.5 ${
+                            albumSortBy === 'count' 
+                              ? 'bg-sky-600 text-white font-semibold shadow' 
+                              : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+                          }`}
+                          title="Ordenar por quantidade de fotos e vídeos"
+                        >
+                          <ImageIcon className="w-3.5 h-3.5" />
+                          <span>Qtd Fotos {albumSortBy === 'count' ? (albumSortOrder === 'desc' ? '(Mais fotos)' : '(Menos fotos)') : ''}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAlbumSortChange('custom')}
+                          className={`px-3 py-1.5 text-xs rounded-lg transition flex items-center gap-1.5 ${
+                            albumSortBy === 'custom' 
+                              ? 'bg-sky-600 text-white font-semibold shadow' 
+                              : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
+                          }`}
+                          title="Ordem personalizada / manual (usando as setas ou arrastando)"
+                        >
+                          <SlidersHorizontal className="w-3.5 h-3.5" />
+                          <span>Personalizada</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {albumSortBy !== 'custom' && (
+                        <button
+                          type="button"
+                          onClick={handleToggleAlbumSortOrder}
+                          className="px-3 py-1.5 bg-neutral-950 border border-neutral-800 hover:bg-neutral-900 text-xs text-neutral-300 rounded-xl flex items-center gap-1.5 font-medium transition"
+                          title="Inverter direção da ordenação"
+                        >
+                          <ArrowUpDown className="w-3.5 h-3.5 text-sky-400" />
+                          <span>{albumSortOrder === 'desc' ? 'Decrescente' : 'Crescente'}</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
                 {/* Grade de Álbuns */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {albums.map((alb) => (
-                    <div key={alb.id} className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden flex flex-col justify-between hover:border-neutral-700 transition">
+                  {albums.map((alb, idx) => (
+                    <div 
+                      key={alb.id} 
+                      draggable
+                      onDragStart={() => handleDragStartAlbum(idx)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => handleDropAlbum(idx)}
+                      className={`bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden flex flex-col justify-between hover:border-neutral-700 transition group ${
+                        draggedAlbumIndex === idx ? 'opacity-40 border-dashed border-sky-400' : ''
+                      }`}
+                    >
                       <div onClick={() => setViewingAlbumId(alb.id)} className="h-44 bg-black cursor-pointer overflow-hidden relative group">
                         <img src={alb.cover} alt={alb.name} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                        
+                        {/* Selo da Ordem / Posição do Álbum com Alça de Arrastar */}
+                        <div className="absolute top-2.5 left-2.5 z-10 flex items-center gap-1 bg-black/70 backdrop-blur-md px-2 py-1 rounded-xl border border-white/10 text-white font-mono text-xs shadow-lg">
+                          <GripVertical className="w-3.5 h-3.5 text-neutral-400 cursor-grab active:cursor-grabbing" title="Arraste para reordenar" />
+                          <span className="font-bold">#{idx + 1}</span>
+                        </div>
+
                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                           <span className="px-3 py-1.5 bg-black/70 backdrop-blur text-white text-xs rounded-xl font-medium">Abrir Fotos</span>
                         </div>
                       </div>
-                      <div className="p-4 flex items-center justify-between border-t border-neutral-800/80">
-                        <div>
-                          <h3 className="font-bold text-sm text-white truncate max-w-[180px]">{alb.name}</h3>
-                          <span className="text-[11px] text-neutral-400">{mediaList.filter(m => m.albumId === alb.id).length} fotos</span>
+                      
+                      <div className="p-4 flex items-center justify-between border-t border-neutral-800/80 gap-2">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="font-bold text-sm text-white truncate" title={alb.name}>{alb.name}</h3>
+                          <span className="text-[11px] text-neutral-400">{mediaList.filter(m => m.albumId === alb.id).length} fotos/vídeos</span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {/* Botões Mover Álbum (Subir / Descer de posição) */}
+                          <div className="flex items-center bg-neutral-950 p-0.5 rounded-lg border border-neutral-800">
+                            <button 
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleMoveAlbum(idx, -1); }} 
+                              disabled={idx === 0} 
+                              className={`p-1.5 rounded-md transition ${
+                                idx === 0 
+                                  ? 'text-neutral-700 cursor-not-allowed' 
+                                  : 'text-neutral-400 hover:text-sky-400 hover:bg-neutral-900 active:scale-95'
+                              }`} 
+                              title="Mover Álbum para Trás (Esquerda)"
+                            >
+                              <ChevronLeft className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button 
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleMoveAlbum(idx, 1); }} 
+                              disabled={idx === albums.length - 1} 
+                              className={`p-1.5 rounded-md transition ${
+                                idx === albums.length - 1 
+                                  ? 'text-neutral-700 cursor-not-allowed' 
+                                  : 'text-neutral-400 hover:text-sky-400 hover:bg-neutral-900 active:scale-95'
+                              }`} 
+                              title="Mover Álbum para Frente (Direita)"
+                            >
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
                           <button onClick={() => {
                             setEditingAlbumId(alb.id);
                             setEditAlbumName(alb.name);
@@ -2511,6 +2776,7 @@ export default function TravelFrameApp() {
                           }} className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800" title="Editar Álbum">
                             <Edit3 className="w-4 h-4" />
                           </button>
+                          
                           <button onClick={() => { 
                             setSelectedAlbumId(alb.id); 
                             setCurrentIndex(0); 

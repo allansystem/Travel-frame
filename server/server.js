@@ -80,7 +80,9 @@ const DEFAULT_STATE = {
     transitionEffect: 'fade',
     scheduleEnabled: true,
     autoRotatePortrait: false,
-    kenBurns: true
+    kenBurns: true,
+    albumsSortBy: 'custom',
+    albumsSortOrder: 'asc'
   }
 };
 
