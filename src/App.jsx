@@ -145,6 +145,14 @@ export default function TravelFrameApp() {
   const [newSchedEnd, setNewSchedEnd] = useState('07:00');
   const [draggedScheduleIndex, setDraggedScheduleIndex] = useState(null);
   
+  // Edição de Agendamento
+  const [editingScheduleId, setEditingScheduleId] = useState(null);
+  const [editSchedAlbumId, setEditSchedAlbumId] = useState('SLEEP');
+  const [editSchedDeviceId, setEditSchedDeviceId] = useState('all');
+  const [editSchedDays, setEditSchedDays] = useState([0, 1, 2, 3, 4, 5, 6]);
+  const [editSchedStart, setEditSchedStart] = useState('22:00');
+  const [editSchedEnd, setEditSchedEnd] = useState('07:00');
+  
   // Dispositivos Remotos
   const [registeredDevices, setRegisteredDevices] = useState({});
   const [newDeviceName, setNewDeviceName] = useState('');
@@ -581,6 +589,95 @@ export default function TravelFrameApp() {
       prev.includes(dayId) ? prev.filter(d => d !== dayId) : [...prev, dayId].sort()
     );
   };
+
+  const handleToggleEditSchedDay = (dayId) => {
+    setEditSchedDays(prev => 
+      prev.includes(dayId) ? prev.filter(d => d !== dayId) : [...prev, dayId].sort()
+    );
+  };
+
+  const handleStartEditSchedule = (sched) => {
+    setEditingScheduleId(sched.id);
+    setEditSchedAlbumId(sched.albumId || 'SLEEP');
+    setEditSchedDeviceId(cleanDeviceId(sched.deviceId || 'all'));
+    setEditSchedDays(Array.isArray(sched.days) ? [...sched.days].sort() : [0, 1, 2, 3, 4, 5, 6]);
+    setEditSchedStart(sched.start || '22:00');
+    setEditSchedEnd(sched.end || '07:00');
+  };
+
+  const handleCancelEditSchedule = () => {
+    setEditingScheduleId(null);
+  };
+
+  const handleSaveEditSchedule = () => {
+    if (!editingScheduleId) return;
+
+    const targetAlbum = editSchedAlbumId || 'SLEEP';
+    if (editSchedDays.length === 0) {
+      alert('⚠️ Selecione pelo menos um dia da semana para o agendamento.');
+      return;
+    }
+    if (editSchedStart === editSchedEnd) {
+      alert('⚠️ O horário de início e fim não podem ser iguais.');
+      return;
+    }
+
+    const cleanTargetDev = cleanDeviceId(editSchedDeviceId);
+    const isSleepAction = targetAlbum === 'SLEEP';
+    const albumName = isSleepAction ? 'Modo Dormir' : (albums.find(a => a.id === targetAlbum)?.name || 'Álbum');
+
+    // 1. BLOQUEIO DE DUPLICATA EXATA EM OUTROS AGENDAMENTOS
+    const otherSchedules = albumSchedules.filter(s => s.id !== editingScheduleId);
+    const isExactDuplicate = otherSchedules.some(s => {
+      const devMatch = cleanDeviceId(s.deviceId) === cleanTargetDev;
+      const albMatch = s.albumId === targetAlbum;
+      const startMatch = s.start === editSchedStart;
+      const endMatch = s.end === editSchedEnd;
+      const sDays = Array.isArray(s.days) ? [...s.days].sort().join(',') : '';
+      const nDays = [...editSchedDays].sort().join(',');
+      return devMatch && albMatch && startMatch && endMatch && sDays === nDays;
+    });
+
+    if (isExactDuplicate) {
+      alert('⚠️ Já existe outro agendamento idêntico a este cadastrado na lista!');
+      return;
+    }
+
+    // 2. BLOQUEIO DE CONFLITO DE HORÁRIO NO MESMO DISPOSITIVO COM OUTROS AGENDAMENTOS
+    const conflictingSchedule = otherSchedules.find(s => {
+      const sDev = cleanDeviceId(s.deviceId);
+      const devConflict = sDev === cleanTargetDev || sDev === 'all' || cleanTargetDev === 'all';
+      if (!devConflict) return false;
+
+      const sDays = Array.isArray(s.days) ? s.days : [0, 1, 2, 3, 4, 5, 6];
+      const dayConflict = sDays.some(d => editSchedDays.includes(d));
+      if (!dayConflict) return false;
+
+      return checkIntervalOverlap(s.start, s.end, editSchedStart, editSchedEnd);
+    });
+
+    if (conflictingSchedule) {
+      const conflictDevName = getDeviceDisplayName(conflictingSchedule.deviceId);
+      alert(
+        `⚠️ Conflito de Horário Detectado!\n\nExiste conflito com o agendamento "${conflictingSchedule.ruleName}" no ${conflictDevName} (${conflictingSchedule.start} às ${conflictingSchedule.end}) para os mesmos dias.\n\nAltere o horário ou escolha outros dias.`
+      );
+      return;
+    }
+
+    const updated = albumSchedules.map(s => s.id === editingScheduleId ? {
+      ...s,
+      albumId: targetAlbum,
+      ruleName: albumName,
+      deviceId: cleanTargetDev,
+      days: [...editSchedDays].sort(),
+      start: editSchedStart,
+      end: editSchedEnd
+    } : s);
+
+    setAlbumSchedules(updated);
+    syncWithServer({ schedules: updated });
+    setEditingScheduleId(null);
+  };
   
   // ADICIONAR AGENDAMENTO COM VALIDAÇÃO DE DUPLICATAS E CONFLITOS DE HORÁRIO
   const handleAddAlbumSchedule = () => {
@@ -651,6 +748,9 @@ export default function TravelFrameApp() {
   };
   
   const handleDeleteAlbumSchedule = (ruleId) => {
+    if (editingScheduleId === ruleId) {
+      setEditingScheduleId(null);
+    }
     const updated = albumSchedules.filter(s => s.id !== ruleId);
     setAlbumSchedules(updated);
     syncWithServer({ schedules: updated });
@@ -2223,6 +2323,183 @@ export default function TravelFrameApp() {
                       const isFirst = idx === 0;
                       const isLast = idx === albumSchedules.length - 1;
                       const isDraggingThis = draggedScheduleIndex === idx;
+                      const isEditingThis = editingScheduleId === sched.id;
+
+                      if (isEditingThis) {
+                        return (
+                          <div 
+                            key={sched.id} 
+                            className="p-4 bg-neutral-900 border-2 border-sky-500/70 rounded-xl space-y-3.5 shadow-2xl transition-all"
+                          >
+                            <div className="flex items-center justify-between border-b border-neutral-800 pb-2.5">
+                              <div className="flex items-center gap-2">
+                                <div className="p-1.5 bg-sky-500/20 rounded-lg text-sky-400">
+                                  <Edit3 className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                                    <span>Editar Agendamento #{idx + 1}</span>
+                                  </h4>
+                                  <p className="text-[10px] text-neutral-400">Altere o álbum, telão alvo, dias da semana ou horários.</p>
+                                </div>
+                              </div>
+                              <button 
+                                type="button" 
+                                onClick={handleCancelEditSchedule}
+                                className="p-1 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition"
+                                title="Cancelar edição"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[11px] text-neutral-400 block mb-1 font-semibold">Modo de Exibição / Ação:</label>
+                                <select 
+                                  value={editSchedAlbumId} 
+                                  onChange={(e) => setEditSchedAlbumId(e.target.value)}
+                                  className="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
+                                >
+                                  <option value="SLEEP">🌙 Modo Dormir (Apagar Tela e Economizar Energia)</option>
+                                  {albums.map((alb) => (
+                                    <option key={alb.id} value={alb.id}>🖼️ Exibir Álbum: {alb.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              
+                              <div>
+                                <label className="text-[11px] text-neutral-400 block mb-1 font-semibold">Telão Alvo:</label>
+                                <select 
+                                  value={editSchedDeviceId} 
+                                  onChange={(e) => setEditSchedDeviceId(e.target.value)}
+                                  className="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
+                                >
+                                  <option value="all">Todos os Telões</option>
+                                  {Object.keys(registeredDevices).map((devId) => (
+                                    <option key={devId} value={devId}>Telão: [{devId}]</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                            
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <label className="text-[11px] text-neutral-400 font-semibold">Dias da Semana:</label>
+                                <div className="flex gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditSchedDays([0, 1, 2, 3, 4, 5, 6])}
+                                    className="text-[10px] text-sky-400 hover:underline"
+                                  >
+                                    Todos
+                                  </button>
+                                  <span className="text-neutral-600">|</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditSchedDays([1, 2, 3, 4, 5])}
+                                    className="text-[10px] text-sky-400 hover:underline"
+                                  >
+                                    Seg-Sex
+                                  </button>
+                                  <span className="text-neutral-600">|</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditSchedDays([0, 6])}
+                                    className="text-[10px] text-sky-400 hover:underline"
+                                  >
+                                    Fins de semana
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {DAYS_OF_WEEK.map(d => (
+                                  <button
+                                    key={d.id}
+                                    type="button"
+                                    onClick={() => handleToggleEditSchedDay(d.id)}
+                                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
+                                      editSchedDays.includes(d.id) 
+                                        ? 'bg-sky-600 text-white shadow' 
+                                        : 'bg-neutral-950 text-neutral-400 border border-neutral-800 hover:bg-neutral-800'
+                                    }`}
+                                  >
+                                    {d.label}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-3 pt-1">
+                              <div>
+                                <label className="text-[11px] text-neutral-400 block mb-1 font-semibold">Horário de Início:</label>
+                                <input 
+                                  type="time" 
+                                  value={editSchedStart} 
+                                  onChange={(e) => setEditSchedStart(e.target.value)} 
+                                  className="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-sky-500" 
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[11px] text-neutral-400 block mb-1 font-semibold">Horário de Fim:</label>
+                                <input 
+                                  type="time" 
+                                  value={editSchedEnd} 
+                                  onChange={(e) => setEditSchedEnd(e.target.value)} 
+                                  className="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-sky-500" 
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 pt-1 text-[11px] text-neutral-400">
+                              <span>Presets rápidos:</span>
+                              <button
+                                type="button"
+                                onClick={() => { setEditSchedStart('22:00'); setEditSchedEnd('07:00'); setEditSchedAlbumId('SLEEP'); }}
+                                className="px-2 py-0.5 bg-neutral-950 border border-neutral-800 hover:border-sky-500 rounded text-neutral-300 text-[10px]"
+                              >
+                                🌙 Noite (22:00 - 07:00)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setEditSchedStart('08:00'); setEditSchedEnd('18:00'); }}
+                                className="px-2 py-0.5 bg-neutral-950 border border-neutral-800 hover:border-sky-500 rounded text-neutral-300 text-[10px]"
+                              >
+                                ☀️ Comercial (08:00 - 18:00)
+                              </button>
+                            </div>
+
+                            <div className="flex items-center justify-between pt-2.5 border-t border-neutral-800">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAlbumSchedule(sched.id)}
+                                className="px-3 py-1.5 text-rose-400 hover:bg-rose-950/40 rounded-lg text-xs flex items-center gap-1.5 transition"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Excluir</span>
+                              </button>
+
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={handleCancelEditSchedule}
+                                  className="px-3.5 py-1.5 text-xs text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-800 transition"
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleSaveEditSchedule}
+                                  className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold shadow-md transition flex items-center gap-1.5"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                  <span>Salvar Alterações</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
 
                       return (
                         <div 
@@ -2275,7 +2552,7 @@ export default function TravelFrameApp() {
                             </div>
                           </div>
 
-                          {/* AÇÕES: BOTÕES SUBIR / DESCER E EXCLUIR */}
+                          {/* AÇÕES: BOTÕES SUBIR / DESCER, EDITAR E EXCLUIR */}
                           <div className="flex items-center gap-1">
                             <button 
                               onClick={() => handleMoveSchedule(idx, -1)} 
@@ -2304,6 +2581,14 @@ export default function TravelFrameApp() {
                             </button>
 
                             <div className="w-px h-4 bg-neutral-800 mx-1" />
+
+                            <button 
+                              onClick={() => handleStartEditSchedule(sched)} 
+                              className="p-1.5 text-neutral-400 hover:text-sky-400 rounded-lg hover:bg-neutral-900 transition active:scale-95" 
+                              title="Editar este agendamento"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
 
                             <button 
                               onClick={() => handleDeleteAlbumSchedule(sched.id)} 
