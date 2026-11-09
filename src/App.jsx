@@ -167,6 +167,7 @@ export default function TravelFrameApp() {
   const videoRef = useRef(null);
   const slideshowContainerRef = useRef(null);
   const activeRuleIdRef = useRef(null);
+  const activeRuleFingerprintRef = useRef('');
   const wakeLockRef = useRef(null);
   const lastStateRawRef = useRef('');
   const lastSlideChangeTimeRef = useRef(Date.now());
@@ -285,7 +286,36 @@ export default function TravelFrameApp() {
     }
   };
   
-  // 2. POLLING DO KIOSK (Respeita Agendamentos Ativos e Comandos Remotos)
+  // 2. SINCRONIZAÇÃO AUTOMÁTICA DE ESTADO (Global: Telões, Kiosk e Painel)
+  useEffect(() => {
+    const statePoller = setInterval(async () => {
+      try {
+        const resState = await fetch('/api/state');
+        if (resState.ok) {
+          const rawText = await resState.text();
+          // Só atualiza os estados se os dados no servidor tiverem sido realmente alterados
+          if (rawText !== lastStateRawRef.current) {
+            lastStateRawRef.current = rawText;
+            const data = JSON.parse(rawText);
+            if (data.albums) setAlbums(data.albums);
+            if (data.mediaList) setMediaList(data.mediaList);
+            if (Array.isArray(data.schedules)) {
+              setAlbumSchedules(data.schedules);
+              // Força o agendador a reavaliar as regras imediatamente sem precisar de F5
+              activeRuleFingerprintRef.current = '';
+            }
+            if (data.settings && data.settings.scheduleEnabled !== undefined) {
+              setScheduleEnabled(data.settings.scheduleEnabled);
+            }
+          }
+        }
+      } catch (e) {}
+    }, 2500);
+
+    return () => clearInterval(statePoller);
+  }, []);
+
+  // 3. POLLING DO TELÃO / KIOSK (Comandos Remotos, Rotação e Modo Repouso Manual)
   useEffect(() => {
     if (!currentDeviceParam) return;
     const myCleanId = cleanDeviceId(currentDeviceParam);
@@ -318,21 +348,8 @@ export default function TravelFrameApp() {
             }
           }
         }
-        
-        const resState = await fetch('/api/state');
-        if (resState.ok) {
-          const rawText = await resState.text();
-          // Só atualiza os estados se os dados no servidor tiverem sido realmente alterados
-          if (rawText !== lastStateRawRef.current) {
-            lastStateRawRef.current = rawText;
-            const data = JSON.parse(rawText);
-            if (data.albums) setAlbums(data.albums);
-            if (data.mediaList) setMediaList(data.mediaList);
-            if (Array.isArray(data.schedules)) setAlbumSchedules(data.schedules);
-          }
-        }
       } catch (e) {}
-    }, 2500);
+    }, 2000);
     
     return () => clearInterval(devicePoller);
   }, [currentDeviceParam]);
@@ -554,8 +571,11 @@ export default function TravelFrameApp() {
         });
         
         if (matchingSchedule) {
-          if (activeRuleIdRef.current !== matchingSchedule.id) {
+          const ruleFingerprint = `${matchingSchedule.id}:${matchingSchedule.albumId}:${matchingSchedule.deviceId}:${matchingSchedule.start}:${matchingSchedule.end}:${(matchingSchedule.days || []).join(',')}`;
+          
+          if (activeRuleFingerprintRef.current !== ruleFingerprint) {
             activeRuleIdRef.current = matchingSchedule.id;
+            activeRuleFingerprintRef.current = ruleFingerprint;
             
             if (matchingSchedule.albumId === 'SLEEP') {
               setIsCurrentlySleeping(true);
@@ -563,19 +583,33 @@ export default function TravelFrameApp() {
             } else {
               if (isCurrentlySleeping) {
                 setIsCurrentlySleeping(false);
+                setActiveSleepReason('');
               }
-              setSelectedAlbumId(matchingSchedule.albumId);
-              setCurrentIndex(0);
+              if (selectedAlbumIdRef.current !== matchingSchedule.albumId) {
+                setSelectedAlbumId(matchingSchedule.albumId);
+                setCurrentIndex(0);
+                lastSlideChangeTimeRef.current = Date.now();
+              }
             }
           }
         } else {
           // Nenhuma regra ativa no momento
-          if (activeRuleIdRef.current !== null) {
+          if (activeRuleIdRef.current !== null || activeRuleFingerprintRef.current !== '') {
             activeRuleIdRef.current = null;
+            activeRuleFingerprintRef.current = '';
             if (isCurrentlySleeping && activeSleepReason.includes('Repouso')) {
               setIsCurrentlySleeping(false);
               setActiveSleepReason('');
             }
+          }
+        }
+      } else {
+        if (activeRuleIdRef.current !== null || activeRuleFingerprintRef.current !== '') {
+          activeRuleIdRef.current = null;
+          activeRuleFingerprintRef.current = '';
+          if (isCurrentlySleeping && activeSleepReason.includes('Repouso')) {
+            setIsCurrentlySleeping(false);
+            setActiveSleepReason('');
           }
         }
       }
@@ -674,6 +708,7 @@ export default function TravelFrameApp() {
       end: editSchedEnd
     } : s);
 
+    activeRuleFingerprintRef.current = '';
     setAlbumSchedules(updated);
     syncWithServer({ schedules: updated });
     setEditingScheduleId(null);
@@ -742,6 +777,7 @@ export default function TravelFrameApp() {
       end: newSchedEnd
     };
     
+    activeRuleFingerprintRef.current = '';
     const updated = [...albumSchedules, newRule];
     setAlbumSchedules(updated);
     syncWithServer({ schedules: updated });
@@ -750,6 +786,10 @@ export default function TravelFrameApp() {
   const handleDeleteAlbumSchedule = (ruleId) => {
     if (editingScheduleId === ruleId) {
       setEditingScheduleId(null);
+    }
+    activeRuleFingerprintRef.current = '';
+    if (activeRuleIdRef.current === ruleId) {
+      activeRuleIdRef.current = null;
     }
     const updated = albumSchedules.filter(s => s.id !== ruleId);
     setAlbumSchedules(updated);
@@ -764,6 +804,7 @@ export default function TravelFrameApp() {
     const item = updated[index];
     updated[index] = updated[targetIndex];
     updated[targetIndex] = item;
+    activeRuleFingerprintRef.current = '';
     setAlbumSchedules(updated);
     syncWithServer({ schedules: updated });
   };
@@ -775,6 +816,7 @@ export default function TravelFrameApp() {
       if (a.start !== b.start) return a.start.localeCompare(b.start);
       return a.end.localeCompare(b.end);
     });
+    activeRuleFingerprintRef.current = '';
     setAlbumSchedules(updated);
     syncWithServer({ schedules: updated });
   };
@@ -789,6 +831,7 @@ export default function TravelFrameApp() {
     const updated = [...albumSchedules];
     const [moved] = updated.splice(draggedScheduleIndex, 1);
     updated.splice(targetIndex, 0, moved);
+    activeRuleFingerprintRef.current = '';
     setAlbumSchedules(updated);
     syncWithServer({ schedules: updated });
     setDraggedScheduleIndex(null);
