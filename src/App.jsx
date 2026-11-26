@@ -5,7 +5,7 @@ import {
   Upload, Image as ImageIcon, Video, Clock, MapPin, Cloud, 
   Moon, Sun, Trash2, Shuffle, Layers, Sparkles, ArrowLeft, Plus, 
   Camera, Key, CheckCircle2, AlertCircle, Folder, Monitor, Volume2, VolumeX, Eye, Edit3, Star, Calendar, Check, MoveRight, RotateCcw, RotateCw, Tv, RefreshCw, Film, Copy, Clock3, CalendarDays, Type, AlignLeft, AlertTriangle, CloudSun, SunMedium,
-  ChevronLeft, ChevronRight, X, HardDrive, ArrowUpDown, SlidersHorizontal, Download, ChevronUp, ChevronDown, GripVertical
+  ChevronLeft, ChevronRight, X, HardDrive, ArrowUpDown, SlidersHorizontal, Download, ChevronUp, ChevronDown, GripVertical, Keyboard, HelpCircle
 } from 'lucide-react';
 
 const DAYS_OF_WEEK = [
@@ -73,6 +73,7 @@ export default function TravelFrameApp() {
   const [newAlbumDesc, setNewAlbumDesc] = useState('');
   const [newAlbumOrientation, setNewAlbumOrientation] = useState('horizontal');
   const [newAlbumFitMode, setNewAlbumFitMode] = useState('contain-blur');
+  const [newAlbumFrameMatting, setNewAlbumFrameMatting] = useState('none');
   const [newAlbumSlideSpeed, setNewAlbumSlideSpeed] = useState(7);
   const [newAlbumShowClock, setNewAlbumShowClock] = useState(true);
   const [newAlbumShowWeather, setNewAlbumShowWeather] = useState(true);
@@ -90,6 +91,7 @@ export default function TravelFrameApp() {
   const [editAlbumDesc, setEditAlbumDesc] = useState('');
   const [editAlbumOrientation, setEditAlbumOrientation] = useState('horizontal');
   const [editAlbumFitMode, setEditAlbumFitMode] = useState('contain-blur');
+  const [editAlbumFrameMatting, setEditAlbumFrameMatting] = useState('none');
   const [editAlbumSlideSpeed, setEditAlbumSlideSpeed] = useState(7);
   const [editAlbumShowClock, setEditAlbumShowClock] = useState(true);
   const [editAlbumShowWeather, setEditAlbumShowWeather] = useState(true);
@@ -100,6 +102,12 @@ export default function TravelFrameApp() {
   const [editAlbumVideoSound, setEditAlbumVideoSound] = useState(false);
   const [editAlbumSortBy, setEditAlbumSortBy] = useState('date');
   const [editAlbumSortOrder, setEditAlbumSortOrder] = useState('desc');
+  
+  // Kiosk / Galeria UX
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [showCaptionsOverlay, setShowCaptionsOverlay] = useState(true);
+  const [soundOverride, setSoundOverride] = useState(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
   
   // Upload Manual
   const manualFileInputRef = useRef(null);
@@ -846,6 +854,7 @@ export default function TravelFrameApp() {
       cover: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?auto=format&fit=crop&w=1200&q=80',
       orientation: newAlbumOrientation,
       fitMode: newAlbumFitMode,
+      frameMatting: newAlbumFrameMatting || 'none',
       slideSpeed: newAlbumSlideSpeed,
       showClockWidget: newAlbumShowClock,
       showWeatherWidget: newAlbumShowWeather,
@@ -862,6 +871,7 @@ export default function TravelFrameApp() {
     syncWithServer({ albums: updated });
     setNewAlbumName('');
     setNewAlbumDesc('');
+    setNewAlbumFrameMatting('none');
     setIsCreatingAlbum(false);
   };
   
@@ -873,6 +883,7 @@ export default function TravelFrameApp() {
       description: editAlbumDesc.trim(),
       orientation: editAlbumOrientation,
       fitMode: editAlbumFitMode,
+      frameMatting: editAlbumFrameMatting || a.frameMatting || 'none',
       slideSpeed: editAlbumSlideSpeed,
       showClockWidget: editAlbumShowClock,
       showWeatherWidget: editAlbumShowWeather,
@@ -979,9 +990,8 @@ export default function TravelFrameApp() {
     });
   };
   
-  const handleManualUpload = async (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
+  const processUploadFiles = async (files) => {
+    if (!files || files.length === 0) return;
     
     const targetAlbum = viewingAlbumId || selectedAlbumId || albums[0]?.id;
     const albumObj = albums.find(a => a.id === targetAlbum);
@@ -1003,6 +1013,11 @@ export default function TravelFrameApp() {
     
     setUploadProgress(null);
     if (manualFileInputRef.current) manualFileInputRef.current.value = '';
+  };
+
+  const handleManualUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    await processUploadFiles(files);
   };
     
   // Google Fotos OAuth
@@ -1340,13 +1355,16 @@ export default function TravelFrameApp() {
   };
   
   const activeFitMode = playingAlbum?.fitMode || 'contain-blur';
+  const activeFrameMatting = playingAlbum?.frameMatting || 'none';
   const activeSlideSpeed = Math.max(3, Number(playingAlbum?.slideSpeed) || 7);
   const activeShowClock = playingAlbum?.showClockWidget !== undefined ? playingAlbum.showClockWidget : true;
   const activeShowWeather = playingAlbum?.showWeatherWidget !== undefined ? playingAlbum.showWeatherWidget : true;
   const activeShowLocation = playingAlbum?.showLocation !== undefined ? playingAlbum.showLocation : true;
   const activeShowTitle = playingAlbum?.showTitle !== undefined ? playingAlbum.showTitle : true;
   const activeShowDescription = playingAlbum?.showDescription !== undefined ? playingAlbum.showDescription : true;
-  const activeVideoSound = playingAlbum?.videoSound !== undefined ? playingAlbum.videoSound : false;
+  const activeVideoSound = soundOverride !== null 
+    ? soundOverride 
+    : (playingAlbum?.videoSound !== undefined ? playingAlbum.videoSound : false);
   
   // Referências sincronizadas em cada render para acesso atômico e imune a fechamentos defasados
   const activeMediaListRef = useRef(activeMediaList);
@@ -1480,7 +1498,7 @@ export default function TravelFrameApp() {
     return () => clearInterval(slideEngine);
   }, []);
 
-  // Atalhos de teclado no modo Slideshow (Espaço = Play/Pause, Setas = Avançar/Voltar, S = Aleatório, F = Tela Cheia)
+  // Atalhos de teclado no modo Slideshow (Espaço = Play/Pause, Setas = Avançar/Voltar, S = Aleatório, F = Tela Cheia, I = Legendas/Relógio, M = Som Vídeo, ? = Ajuda)
   useEffect(() => {
     if (activeTab !== 'slideshow') return;
 
@@ -1502,12 +1520,29 @@ export default function TravelFrameApp() {
       } else if (e.code === 'KeyF') {
         e.preventDefault();
         toggleFullscreen();
+      } else if (e.code === 'KeyI') {
+        e.preventDefault();
+        setShowCaptionsOverlay(prev => !prev);
+      } else if (e.code === 'KeyM') {
+        e.preventDefault();
+        setSoundOverride(prev => {
+          const current = prev !== null ? prev : Boolean(playingAlbum?.videoSound);
+          return !current;
+        });
+      } else if (e.key === '?' || (e.shiftKey && e.code === 'Slash') || e.code === 'KeyH') {
+        e.preventDefault();
+        setShowShortcutsModal(prev => !prev);
+      } else if (e.code === 'Escape') {
+        if (showShortcutsModal) {
+          e.preventDefault();
+          setShowShortcutsModal(false);
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab, isShuffleOn, activeMediaList.length]);
+  }, [activeTab, isShuffleOn, activeMediaList.length, showShortcutsModal, playingAlbum?.videoSound]);
   
   const handleVideoEnded = () => {
     if (activeMediaList.length <= 1) {
@@ -1736,50 +1771,50 @@ export default function TravelFrameApp() {
   const isCanvasRotated = effectiveRotation !== 0;
   
   return (
-    <div className="flex flex-col md:flex-row h-screen w-full bg-neutral-950 text-neutral-100 font-sans overflow-hidden select-none">
+    <div className="flex flex-col md:flex-row h-screen w-full bg-gallery-bg text-neutral-100 font-sans overflow-hidden select-none">
       
       {/* 1. BARRA LATERAL DESKTOP (Gestor) */}
       {!isFullscreen && !isKioskDisplayMode && (
-        <aside className="hidden md:flex w-64 bg-neutral-900 border-r border-neutral-800 flex-col justify-between shrink-0 z-30">
+        <aside className="hidden md:flex w-64 bg-gallery-surface border-r border-gallery-border flex-col justify-between shrink-0 z-30">
           <div>
-            <div className="p-5 border-b border-neutral-800/80 flex items-center gap-3">
+            <div className="p-5 border-b border-gallery-border flex items-center gap-3">
               <img 
                 src="/logo.png" 
                 alt="TravelFrame Logo" 
-                className="h-10 w-10 rounded-xl object-contain shadow-lg shadow-indigo-500/20 cursor-pointer hover:scale-105 transition-transform"
+                className="h-10 w-10 rounded-xl object-contain shadow-lg shadow-sky-500/10 cursor-pointer hover:scale-105 transition-transform"
                 onClick={() => { setActiveTab('slideshow'); setViewingAlbumId(null); }}
               />
               <div>
-                <h1 className="font-bold text-base leading-tight tracking-tight text-white">TravelFrame</h1>
-                <p className="text-xs text-neutral-400">Quadro Digital Centralizado</p>
+                <h1 className="font-serif text-lg font-normal leading-tight tracking-wide text-white">TravelFrame</h1>
+                <p className="text-[11px] text-neutral-400 font-sans">Quadro Digital Centralizado</p>
               </div>
             </div>
             
             <nav className="p-3 space-y-1">
               <button
                 onClick={() => { setActiveTab('slideshow'); setViewingAlbumId(null); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === 'slideshow' ? 'bg-sky-600 text-white shadow-md' : 'text-neutral-400 hover:text-white hover:bg-neutral-800/70'
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  activeTab === 'slideshow' ? 'bg-white/10 text-white border border-white/10 shadow-sm' : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
                 }`}
               >
-                <Play className="w-4 h-4" />
+                <Play className="w-4 h-4 text-sky-400" />
                 <span>Apresentação (Slides)</span>
               </button>
               
               <button
                 onClick={() => { setActiveTab('albums'); setViewingAlbumId(null); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === 'albums' ? 'bg-sky-600 text-white shadow-md' : 'text-neutral-400 hover:text-white hover:bg-neutral-800/70'
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  activeTab === 'albums' ? 'bg-white/10 text-white border border-white/10 shadow-sm' : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
                 }`}
               >
-                <Layers className="w-4 h-4" />
+                <Layers className="w-4 h-4 text-indigo-400" />
                 <span>Álbuns & Galeria</span>
               </button>
               
               <button
                 onClick={() => { setActiveTab('devices'); setViewingAlbumId(null); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === 'devices' ? 'bg-sky-600 text-white shadow-md' : 'text-neutral-400 hover:text-white hover:bg-neutral-800/70'
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  activeTab === 'devices' ? 'bg-white/10 text-white border border-white/10 shadow-sm' : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
                 }`}
               >
                 <Tv className="w-4 h-4 text-emerald-400" />
@@ -1788,8 +1823,8 @@ export default function TravelFrameApp() {
               
               <button
                 onClick={() => { setActiveTab('schedules'); setViewingAlbumId(null); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === 'schedules' ? 'bg-sky-600 text-white shadow-md' : 'text-neutral-400 hover:text-white hover:bg-neutral-800/70'
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  activeTab === 'schedules' ? 'bg-white/10 text-white border border-white/10 shadow-sm' : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
                 }`}
               >
                 <CalendarDays className="w-4 h-4 text-amber-400" />
@@ -1798,19 +1833,19 @@ export default function TravelFrameApp() {
               
               <button
                 onClick={() => { setActiveTab('google'); setViewingAlbumId(null); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === 'google' ? 'bg-sky-600 text-white shadow-md' : 'text-neutral-400 hover:text-white hover:bg-neutral-800/70'
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  activeTab === 'google' ? 'bg-white/10 text-white border border-white/10 shadow-sm' : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
                 }`}
               >
-                <Cloud className="w-4 h-4 text-amber-400" />
+                <Cloud className="w-4 h-4 text-sky-400" />
                 <span>Google Fotos</span>
                 {isGoogleConnected && <span className="ml-auto w-2 h-2 rounded-full bg-emerald-500"></span>}
               </button>
               
               <button
                 onClick={() => { setActiveTab('settings'); setViewingAlbumId(null); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  activeTab === 'settings' ? 'bg-sky-600 text-white shadow-md' : 'text-neutral-400 hover:text-white hover:bg-neutral-800/70'
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                  activeTab === 'settings' ? 'bg-white/10 text-white border border-white/10 shadow-sm' : 'text-neutral-400 hover:text-white hover:bg-white/[0.04]'
                 }`}
               >
                 <Settings className="w-4 h-4 text-purple-400" />
@@ -1819,7 +1854,7 @@ export default function TravelFrameApp() {
             </nav>
           </div>
 
-          <div className="p-4 border-t border-neutral-800/80 text-[11px] text-neutral-500 flex items-center justify-between">
+          <div className="p-4 border-t border-gallery-border text-[11px] text-neutral-500 flex items-center justify-between">
             <span>Porta: 3070</span>
             <span className="flex items-center gap-1.5 text-emerald-400 font-mono">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -1947,7 +1982,10 @@ export default function TravelFrameApp() {
                 )}
                 
                 {/* RENDERIZADOR DE MÍDIA COM CROSSFADE SUAVE DE DUPLA CAMADA (SEM TELA PRETA OU PISCAR) */}
-                <div className="relative z-20 w-full h-full flex items-center justify-center overflow-hidden">
+                <div className={`relative z-20 w-full h-full flex items-center justify-center overflow-hidden transition-all duration-700 ${
+                  activeFrameMatting === 'passe-partout' ? 'frame-passe-partout' : 
+                  activeFrameMatting === 'passe-partout-light' ? 'frame-passe-partout-light' : ''
+                }`}>
                   {/* CAMADA INFERIOR: Foto anterior fica 100% visível por baixo enquanto a nova carrega e faz o fade */}
                   {previousSlideMedia && (
                     <div className="absolute inset-0 w-full h-full flex items-center justify-center z-10 pointer-events-none">
@@ -1957,14 +1995,14 @@ export default function TravelFrameApp() {
                           src={previousSlideMedia.url}
                           muted
                           playsInline
-                          className={`w-full h-full ${activeFitMode === 'cover' ? 'object-cover' : 'object-contain'} drop-shadow-2xl`}
+                          className={`w-full h-full ${activeFitMode === 'cover' ? 'object-cover' : 'object-contain'} ${activeFrameMatting !== 'none' ? 'rounded-lg shadow-2xl' : 'drop-shadow-2xl'}`}
                         />
                       ) : (
                         <img
                           key={`prev-img-${previousSlideMedia.id}`}
                           src={previousSlideMedia.url}
                           alt={previousSlideMedia.title}
-                          className={`w-full h-full ${activeFitMode === 'cover' ? 'object-cover' : 'object-contain'} drop-shadow-2xl`}
+                          className={`w-full h-full ${activeFitMode === 'cover' ? 'object-cover' : 'object-contain'} ${activeFrameMatting !== 'none' ? 'rounded-lg shadow-2xl' : 'drop-shadow-2xl'}`}
                         />
                       )}
                     </div>
@@ -1989,7 +2027,7 @@ export default function TravelFrameApp() {
                           onEnded={handleVideoEnded}
                           onError={handleVideoError}
                           onCanPlay={() => setIsCrossFading(true)}
-                          className={`w-full h-full ${activeFitMode === 'cover' ? 'object-cover' : 'object-contain'} drop-shadow-2xl`}
+                          className={`w-full h-full ${activeFitMode === 'cover' ? 'object-cover' : 'object-contain'} ${activeFrameMatting !== 'none' ? 'rounded-lg shadow-2xl' : 'drop-shadow-2xl'}`}
                         />
                       ) : (
                         <img
@@ -1999,7 +2037,7 @@ export default function TravelFrameApp() {
                           onLoad={() => setIsCrossFading(true)}
                           className={`w-full h-full ${
                             activeFitMode === 'cover' ? 'object-cover' : 'object-contain'
-                          } ${kenBurnsEffect ? 'animate-ken-burns' : ''} drop-shadow-2xl`}
+                          } ${kenBurnsEffect ? 'animate-ken-burns' : ''} ${activeFrameMatting !== 'none' ? 'rounded-lg shadow-2xl' : 'drop-shadow-2xl'}`}
                         />
                       )}
                     </div>
@@ -2007,66 +2045,79 @@ export default function TravelFrameApp() {
                 </div>
                 
                 {/* WIDGET SUPERIOR ESQUERDO: RELÓGIO + CLIMA AO VIVO + DESCRIÇÃO DO ÁLBUM (GIRA JUNTO COM A TELA) */}
-                <div className={`absolute top-4 md:top-6 left-4 md:left-6 z-30 flex flex-col items-start gap-2.5 max-w-xl md:max-w-2xl transition-opacity duration-500 ${
-                  controlsVisible ? 'opacity-100' : 'opacity-85 hover:opacity-100'
-                }`}>
-                  {/* LINHA SUPERIOR: RELÓGIO + CLIMA */}
-                  {(activeShowClock || activeShowWeather) && (
-                    <div className="flex items-center gap-3 md:gap-4 bg-black/45 backdrop-blur-md px-3.5 md:px-4 py-2 rounded-2xl border border-white/10 text-white shadow-lg">
-                      {activeShowClock && (
-                        <div className="flex items-center gap-3">
-                          <div className="text-xl md:text-2xl font-semibold tracking-tight font-mono">
-                            {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </div>
-                          <div className="h-5 w-px bg-white/20"></div>
-                          <div className="text-[11px] md:text-xs text-neutral-300 flex flex-col">
-                            <span className="font-medium capitalize">
-                              {currentTime.toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' })}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
-                      {activeShowWeather && weatherData && (
-                        <>
-                          <div className="h-5 w-px bg-white/20"></div>
-                          <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-300">
-                            {weatherData.temp > 22 ? <SunMedium className="w-4 h-4 text-amber-400" /> : <CloudSun className="w-4 h-4 text-sky-400" />}
-                            <span>{weatherData.temp}°C</span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {/* DESCRIÇÃO LOGO ABAIXO DO RELÓGIO COM MESMO TAMANHO DE FONTE (TEXT-XL MD:TEXT-2XL) */}
-                  {activeShowDescription && (currentSlideMedia?.description || currentMedia?.description || currentMediaAlbum?.description) && (
-                    <div className="bg-black/45 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-white/10 text-white shadow-xl">
-                      <p className="text-xl md:text-2xl font-semibold tracking-tight text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] leading-snug">
-                        {currentSlideMedia?.description || currentMedia?.description || currentMediaAlbum?.description}
-                      </p>
-                    </div>
-                  )}
-                </div>
-                
-                {/* LEGENDA DA FOTO (LOCALIZAÇÃO E TÍTULO - GIRA JUNTO COM A TELA) */}
-                {(activeShowLocation || activeShowTitle) && (
-                  <div className={`absolute bottom-20 md:bottom-24 inset-x-0 z-30 pointer-events-none flex flex-col items-center justify-center text-center px-4 transition-opacity duration-700 ${
-                    controlsVisible ? 'opacity-100' : 'opacity-85'
+                {showCaptionsOverlay && (activeShowClock || activeShowWeather || (activeShowDescription && (currentSlideMedia?.description || currentMedia?.description || currentMediaAlbum?.description))) && (
+                  <div className={`absolute top-4 md:top-6 left-4 md:left-6 z-30 flex flex-col items-start gap-2.5 max-w-xl md:max-w-2xl transition-opacity duration-500 ${
+                    controlsVisible ? 'opacity-100' : 'opacity-85 hover:opacity-100'
                   }`}>
-                    <div className="max-w-3xl flex flex-col items-center justify-center space-y-1 drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
-                      {activeShowLocation && (currentSlideMedia || currentMedia)?.location && (
-                        <div className="flex items-center gap-1.5 text-xs md:text-sm font-semibold uppercase tracking-wider text-sky-400">
-                          <MapPin className="w-3.5 h-3.5 shrink-0" />
-                          <span>{(currentSlideMedia || currentMedia).location}</span>
-                        </div>
-                      )}
-                      
+                    {/* LINHA SUPERIOR: RELÓGIO + CLIMA */}
+                    {(activeShowClock || activeShowWeather) && (
+                      <div className="flex items-center gap-3 md:gap-4 gallery-plaque px-3.5 md:px-4 py-2 rounded-xl text-white">
+                        {activeShowClock && (
+                          <div className="flex items-center gap-3">
+                            <div className="text-xl md:text-2xl font-semibold tracking-tight font-mono">
+                              {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                            <div className="h-5 w-px bg-white/20"></div>
+                            <div className="text-[11px] md:text-xs text-neutral-300 flex flex-col">
+                              <span className="font-medium capitalize">
+                                {currentTime.toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' })}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {activeShowWeather && weatherData && (
+                          <>
+                            <div className="h-5 w-px bg-white/20"></div>
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-300">
+                              {weatherData.temp > 22 ? <SunMedium className="w-4 h-4 text-amber-400" /> : <CloudSun className="w-4 h-4 text-sky-400" />}
+                              <span>{weatherData.temp}°C</span>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* DESCRIÇÃO LOGO ABAIXO DO RELÓGIO COM MESMO TAMANHO DE FONTE (TEXT-XL MD:TEXT-2XL) */}
+                    {activeShowDescription && (currentSlideMedia?.description || currentMedia?.description || currentMediaAlbum?.description) && (
+                      <div className="gallery-plaque px-4 py-2.5 rounded-xl text-white">
+                        <p className="font-serif text-lg md:text-xl font-normal tracking-wide text-white/95 leading-snug">
+                          {currentSlideMedia?.description || currentMedia?.description || currentMediaAlbum?.description}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {/* PLACA DE GALERIA EDITORIAL (TÍTULO, LOCALIZAÇÃO, DATA E CÂMERA - GIRA JUNTO COM A TELA) */}
+                {showCaptionsOverlay && (activeShowLocation || activeShowTitle) && ((currentSlideMedia || currentMedia)?.title || (currentSlideMedia || currentMedia)?.location) && (
+                  <div className={`absolute bottom-6 md:bottom-8 left-6 md:left-8 z-30 pointer-events-none transition-all duration-700 ${
+                    controlsVisible ? 'opacity-100 translate-y-0' : 'opacity-85 translate-y-0'
+                  }`}>
+                    <div className="gallery-plaque px-4 py-3 md:px-5 md:py-3.5 rounded-xl max-w-md md:max-w-xl space-y-1">
                       {activeShowTitle && (currentSlideMedia || currentMedia)?.title && (
-                        <h2 className="text-xl md:text-3xl font-extrabold text-white capitalize leading-tight">
+                        <h2 className="font-serif text-xl md:text-2xl lg:text-3xl font-normal text-white/95 tracking-wide leading-snug">
                           {(currentSlideMedia || currentMedia).title}
                         </h2>
                       )}
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] md:text-xs text-neutral-400 tracking-wider">
+                        {activeShowLocation && (currentSlideMedia || currentMedia)?.location && (
+                          <span className="flex items-center gap-1 text-sky-300 font-medium">
+                            <MapPin className="w-3 h-3 shrink-0" />
+                            {(currentSlideMedia || currentMedia).location}
+                          </span>
+                        )}
+                        {(currentSlideMedia || currentMedia)?.date && (
+                          <span className="text-neutral-400">
+                            {new Date((currentSlideMedia || currentMedia).date).toLocaleDateString('pt-BR', { year: 'numeric', month: 'short', day: 'numeric' })}
+                          </span>
+                        )}
+                        {(currentSlideMedia || currentMedia)?.camera && (
+                          <span className="text-neutral-500 text-[10px]">
+                            {(currentSlideMedia || currentMedia).camera}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2087,9 +2138,9 @@ export default function TravelFrameApp() {
                   </div>
                 )}
                 
-                {/* CONTADOR DE SLIDES (GIRA JUNTO COM A TELA) */}
-                <div className={`absolute bottom-6 right-6 z-30 pointer-events-none bg-black/45 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-xs font-mono text-neutral-300 transition-opacity duration-500 flex items-center gap-2 ${
-                  controlsVisible ? 'opacity-100' : 'opacity-0'
+                {/* CONTADOR DE SLIDES & BOTÃO DE AJUDA ? (GIRA JUNTO COM A TELA) */}
+                <div className={`absolute bottom-6 right-6 z-30 pointer-events-auto bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-xs font-mono text-neutral-300 transition-opacity duration-500 flex items-center gap-2.5 ${
+                  controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
                 }`}>
                   {isShuffleOn && (
                     <span className="text-sky-400 flex items-center gap-1 font-sans text-[11px] font-semibold">
@@ -2099,6 +2150,13 @@ export default function TravelFrameApp() {
                   )}
                   <span>{currentIndex + 1} / {activeMediaList.length}</span>
                   <span className="text-[10px] text-neutral-400 font-mono">({activeSlideSpeed}s)</span>
+                  <button 
+                    onClick={() => setShowShortcutsModal(true)} 
+                    title="Atalhos de Teclado (?)"
+                    className="ml-1 p-1 hover:text-white text-neutral-400 rounded hover:bg-white/10 transition"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" />
+                  </button>
                 </div>
                 
                 {/* BARRA DE CONTROLES INFERIOR (GIRA JUNTO COM A TELA) */}
@@ -2806,21 +2864,49 @@ export default function TravelFrameApp() {
         
         {/* 4. ABA ÁLBUNS & GALERIA */}
         {activeTab === 'albums' && (
-          <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-neutral-950">
+          <div 
+            onDragOver={(e) => { e.preventDefault(); setIsDraggingOver(true); }}
+            onDragLeave={(e) => {
+              if (e.currentTarget.contains(e.relatedTarget)) return;
+              setIsDraggingOver(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDraggingOver(false);
+              const files = Array.from(e.dataTransfer.files || []);
+              if (files.length > 0) processUploadFiles(files);
+            }}
+            className="flex-1 overflow-y-auto p-4 md:p-8 bg-neutral-950 relative"
+          >
+            {/* OVERLAY DE DRAG & DROP GLOBAL */}
+            {isDraggingOver && (
+              <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center pointer-events-none p-6">
+                <div className="p-8 rounded-2xl bg-neutral-900 border-2 border-dashed border-sky-400 flex flex-col items-center text-center shadow-2xl space-y-3 max-w-md animate-in fade-in zoom-in-95 duration-150">
+                  <div className="w-16 h-16 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center">
+                    <Upload className="w-8 h-8 animate-bounce" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white">Solte os arquivos para upload</h3>
+                  <p className="text-xs text-neutral-300">
+                    {viewingAlbumId ? `As fotos serão adicionadas ao álbum "${activeViewingAlbum?.name}"` : 'As fotos serão enviadas para o álbum selecionado'}
+                  </p>
+                </div>
+              </div>
+            )}
+
             <input ref={manualFileInputRef} type="file" multiple accept="image/*,video/*,.heic,.HEIC,.heif,.HEIF" onChange={handleManualUpload} className="hidden" />
             
             {!viewingAlbumId ? (
               <div className="space-y-6 max-w-6xl mx-auto">
                 <div className="flex items-center justify-between border-b border-neutral-800 pb-4">
                   <div>
-                    <h2 className="text-xl md:text-2xl font-bold tracking-tight text-white">Coleção de Álbuns</h2>
+                    <h2 className="text-xl md:text-2xl font-bold tracking-tight text-white font-serif">Coleção de Álbuns</h2>
                     <p className="text-xs text-neutral-400 mt-0.5">{mediaList.length} fotos e vídeos salvos no servidor.</p>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => setIsCreatingAlbum(true)} className="px-3 py-2 bg-neutral-900 border border-neutral-800 text-white text-xs font-semibold rounded-xl hover:bg-neutral-800">
+                    <button onClick={() => setIsCreatingAlbum(true)} className="px-3.5 py-2 bg-neutral-900 border border-neutral-800 text-white text-xs font-semibold rounded-xl hover:bg-neutral-800 transition active:scale-95">
                       Novo Álbum
                     </button>
-                    <button onClick={() => { setSelectedAlbumId('all'); setCurrentIndex(0); setActiveTab('slideshow'); }} className="px-3.5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold rounded-xl">
+                    <button onClick={() => { setSelectedAlbumId('all'); setCurrentIndex(0); setActiveTab('slideshow'); }} className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold rounded-xl transition active:scale-95 shadow">
                       Apresentar Todos
                     </button>
                   </div>
@@ -2835,7 +2921,7 @@ export default function TravelFrameApp() {
                       <textarea placeholder="Descrição / Legenda (Ex: Férias em Família)" value={newAlbumDesc} onChange={(e) => setNewAlbumDesc(e.target.value)} rows={2} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white resize-none" />
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div>
                         <label className="text-xs text-neutral-400 block mb-1">Orientação:</label>
                         <select value={newAlbumOrientation} onChange={(e) => setNewAlbumOrientation(e.target.value)} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white">
@@ -2844,11 +2930,19 @@ export default function TravelFrameApp() {
                         </select>
                       </div>
                       <div>
-                        <label className="text-xs text-neutral-400 block mb-1">Enquadramento no Monitor:</label>
+                        <label className="text-xs text-neutral-400 block mb-1">Enquadramento:</label>
                         <select value={newAlbumFitMode} onChange={(e) => setNewAlbumFitMode(e.target.value)} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white">
                           <option value="contain-blur">Fundo Desfocado (Blur)</option>
                           <option value="contain">Bordas Pretas Limpas</option>
                           <option value="cover">Preencher Tela Toda</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-neutral-400 block mb-1">Moldura (Passe-partout):</label>
+                        <select value={newAlbumFrameMatting} onChange={(e) => setNewAlbumFrameMatting(e.target.value)} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white">
+                          <option value="none">Sem Moldura (Padrão)</option>
+                          <option value="passe-partout">Passe-partout Museu Escuro</option>
+                          <option value="passe-partout-light">Passe-partout Museu Claro</option>
                         </select>
                       </div>
                     </div>
@@ -2889,7 +2983,7 @@ export default function TravelFrameApp() {
                       <textarea placeholder="Descrição" value={editAlbumDesc} onChange={(e) => setEditAlbumDesc(e.target.value)} rows={2} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white resize-none" />
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div>
                         <label className="text-xs text-neutral-400 block mb-1">Orientação:</label>
                         <select value={editAlbumOrientation} onChange={(e) => setEditAlbumOrientation(e.target.value)} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white">
@@ -2898,11 +2992,19 @@ export default function TravelFrameApp() {
                         </select>
                       </div>
                       <div>
-                        <label className="text-xs text-neutral-400 block mb-1">Enquadramento no Monitor:</label>
+                        <label className="text-xs text-neutral-400 block mb-1">Enquadramento:</label>
                         <select value={editAlbumFitMode} onChange={(e) => setEditAlbumFitMode(e.target.value)} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white">
                           <option value="contain-blur">Fundo Desfocado (Blur)</option>
                           <option value="contain">Bordas Pretas Limpas</option>
                           <option value="cover">Preencher Tela Toda</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-neutral-400 block mb-1">Moldura (Passe-partout):</label>
+                        <select value={editAlbumFrameMatting} onChange={(e) => setEditAlbumFrameMatting(e.target.value)} className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white">
+                          <option value="none">Sem Moldura (Padrão)</option>
+                          <option value="passe-partout">Passe-partout Museu Escuro</option>
+                          <option value="passe-partout-light">Passe-partout Museu Claro</option>
                         </select>
                       </div>
                     </div>
@@ -3093,6 +3195,7 @@ export default function TravelFrameApp() {
                             setEditAlbumDesc(alb.description || '');
                             setEditAlbumOrientation(alb.orientation || 'horizontal');
                             setEditAlbumFitMode(alb.fitMode || 'contain-blur');
+                            setEditAlbumFrameMatting(alb.frameMatting || 'none');
                             setEditAlbumSlideSpeed(alb.slideSpeed || 7);
                             setEditAlbumShowClock(alb.showClockWidget !== false);
                             setEditAlbumShowWeather(alb.showWeatherWidget !== false);
@@ -3234,11 +3337,19 @@ export default function TravelFrameApp() {
                 })()}
                 
                 {viewingAlbumMedia.length === 0 ? (
-                  <div className="p-12 text-center bg-neutral-900/50 border border-neutral-800 rounded-2xl space-y-3">
-                    <ImageIcon className="w-12 h-12 text-neutral-600 mx-auto" />
-                    <p className="text-neutral-300 text-sm">Este álbum ainda não possui fotos.</p>
-                    <button onClick={() => manualFileInputRef.current?.click()} className="px-4 py-2 bg-sky-600 text-white text-xs rounded-xl font-medium">
-                      Subir fotos agora
+                  <div 
+                    onClick={() => manualFileInputRef.current?.click()}
+                    className="p-14 text-center bg-[#111317]/60 border-2 border-dashed border-white/10 hover:border-sky-500/50 rounded-2xl space-y-3.5 cursor-pointer transition group"
+                  >
+                    <div className="w-14 h-14 rounded-2xl bg-white/5 group-hover:bg-sky-500/10 flex items-center justify-center mx-auto transition">
+                      <ImageIcon className="w-7 h-7 text-neutral-400 group-hover:text-sky-400 transition" />
+                    </div>
+                    <div>
+                      <p className="text-white font-serif text-base">Nenhuma foto neste álbum ainda</p>
+                      <p className="text-neutral-400 text-xs mt-1">Arraste e solte arquivos em qualquer parte da tela ou clique para selecionar do computador</p>
+                    </div>
+                    <button type="button" className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs rounded-xl font-semibold transition active:scale-95 shadow">
+                      Selecionar Fotos & Vídeos
                     </button>
                   </div>
                 ) : (
@@ -3666,6 +3777,80 @@ export default function TravelFrameApp() {
                 title="Excluir Foto"
               >
                 <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* MODAL DE ATALHOS DE TECLADO (KIOSK & GALLERY) */}
+      {showShortcutsModal && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setShowShortcutsModal(false)}
+        >
+          <div 
+            className="bg-[#121418] border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3.5 border-b border-white/10">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-sky-500/10 text-sky-400">
+                  <Keyboard className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-white font-serif tracking-wide">Atalhos de Telão</h3>
+                  <p className="text-xs text-neutral-400 font-sans">Controles de exibição e galeria</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowShortcutsModal(false)} 
+                className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/5 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 text-xs">
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-900/60 border border-white/5">
+                <span className="text-neutral-300">Pausar / Retomar transição</span>
+                <kbd className="px-2.5 py-1 bg-neutral-800 border border-neutral-700/80 rounded font-mono text-[11px] text-neutral-200 shadow-sm">Espaço</kbd>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-900/60 border border-white/5">
+                <span className="text-neutral-300">Próximo slide / Slide anterior</span>
+                <div className="flex gap-1.5">
+                  <kbd className="px-2 py-1 bg-neutral-800 border border-neutral-700/80 rounded font-mono text-[11px] text-neutral-200 shadow-sm">←</kbd>
+                  <kbd className="px-2 py-1 bg-neutral-800 border border-neutral-700/80 rounded font-mono text-[11px] text-neutral-200 shadow-sm">→</kbd>
+                </div>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-900/60 border border-white/5">
+                <span className="text-neutral-300">Tela Cheia</span>
+                <kbd className="px-2.5 py-1 bg-neutral-800 border border-neutral-700/80 rounded font-mono text-[11px] text-neutral-200 shadow-sm">F</kbd>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-900/60 border border-white/5">
+                <span className="text-neutral-300">Modo Limpo (Ocultar/Exibir Placas)</span>
+                <kbd className="px-2.5 py-1 bg-neutral-800 border border-neutral-700/80 rounded font-mono text-[11px] text-neutral-200 shadow-sm">I</kbd>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-900/60 border border-white/5">
+                <span className="text-neutral-300">Mutar / Ativar som de vídeos</span>
+                <kbd className="px-2.5 py-1 bg-neutral-800 border border-neutral-700/80 rounded font-mono text-[11px] text-neutral-200 shadow-sm">M</kbd>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-900/60 border border-white/5">
+                <span className="text-neutral-300">Ordem Aleatória / Sequencial</span>
+                <kbd className="px-2.5 py-1 bg-neutral-800 border border-neutral-700/80 rounded font-mono text-[11px] text-neutral-200 shadow-sm">S</kbd>
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-900/60 border border-white/5">
+                <span className="text-neutral-300">Abrir / Fechar esta ajuda</span>
+                <kbd className="px-2.5 py-1 bg-neutral-800 border border-neutral-700/80 rounded font-mono text-[11px] text-neutral-200 shadow-sm">?</kbd>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button 
+                onClick={() => setShowShortcutsModal(false)}
+                className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold rounded-xl transition shadow active:scale-95"
+              >
+                Entendido
               </button>
             </div>
           </div>
